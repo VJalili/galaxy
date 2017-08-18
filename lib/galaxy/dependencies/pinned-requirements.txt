@@ -72,3 +72,7 @@ pysam==0.8.4+gx5
 
 # Chronos client
 chronos-python==0.38.0
+
+# OpendID Connect & OAuth2.0
+httplib2==0.10.3
+oauth2client==4.1.2
