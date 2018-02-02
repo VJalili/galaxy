@@ -1,0 +1,30 @@
+<tool id="s3_importer" name="AWS S3 Importer" version="0.1.0">
+    <description>imports an object from AWS S3 bucket</description>
+        <requirements>
+            <requirement type="package" version="0.3.3">cloudbridge</requirement>
+        </requirements>
+    <command interpreter="python">
+        s3_importer.py
+            --access=$access
+            --secret=$secret
+            --bucket=$bucket
+            --object=$object
+            --output=$output
+    </command>
+    <inputs>
+        <param name="access" type="text" label="Access key" />
+        <param name="secret" type="text" label="Secret key" />
+        <param name="bucket" type="text" label="Bucket name" />
+        <param name="object" type="text" label="Object name" />
+    </inputs>
+    <outputs>
+        <data name="output" />
+    </outputs>
+    <help>
+
+**What it does**
+
+downloads data from AWS S3
+
+    </help>
+</tool>
