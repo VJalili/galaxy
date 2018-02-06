@@ -1,8 +1,8 @@
 <tool id="s3_importer" name="AWS S3 Importer" version="0.1.0">
     <description>imports an object from AWS S3 bucket</description>
-        <requirements>
+       <requirements>
             <requirement type="package" version="0.3.3">cloudbridge</requirement>
-        </requirements>
+       </requirements>
     <command interpreter="python">
         s3_importer.py
             --access=$access
@@ -18,7 +18,7 @@
         <param name="object" type="text" label="Object name" />
     </inputs>
     <outputs>
-        <data name="output" />
+        <data name="output" type="data" label="Output file"/>
     </outputs>
     <help>
 
