@@ -382,6 +382,7 @@ def __main__():
         print('usage: upload.py <root> <datatypes_conf> <json paramfile> <output spec> ...', file=sys.stderr)
         sys.exit(1)
 
+    print("aaaa")
     output_paths = parse_outputs(sys.argv[4:])
     json_file = open('galaxy.json', 'w')
 

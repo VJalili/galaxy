@@ -164,6 +164,7 @@ class JobLike(object):
         return self.text_metrics + self.numeric_metrics
 
     def set_streams(self, stdout, stderr):
+        log.info(stdout)
         stdout = galaxy.util.unicodify(stdout)
         stderr = galaxy.util.unicodify(stderr)
         if (len(stdout) > galaxy.util.DATABASE_MAX_STRING_SIZE):
