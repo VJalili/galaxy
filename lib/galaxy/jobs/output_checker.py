@@ -142,6 +142,7 @@ def check_output(tool, stdout, stderr, tool_exit_code, job):
     # Store the modified stdout and stderr in the job:
     if job is not None:
         job.set_streams(stdout, stderr)
+        log.info(stdout)
 
     return state
 

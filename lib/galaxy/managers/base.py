@@ -94,7 +94,18 @@ def decode_id(app, id):
         #   resulting in error for valid id
         return app.security.decode_id(str(id))
     except (ValueError, TypeError):
-        msg = "Malformed id ( %s ) specified, unable to decode" % (str(id))
+
+        print '\n\n\n'
+        print '`' * 50
+        print '\n'
+        import traceback
+        for line in traceback.format_stack():
+            print(line.strip())
+        print '\n'
+        print '`' * 50
+        print '\n\n\n'
+
+        msg = "Malformed id ( %s ) specified, unable to decode AAAAAA" % (str(id))
         raise exceptions.MalformedId(msg, id=str(id))
 
 

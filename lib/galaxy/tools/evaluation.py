@@ -180,6 +180,11 @@ class ToolEvaluator(object):
     def __populate_wrappers(self, param_dict, input_datasets, input_dataset_paths, job_working_directory):
 
         def wrap_input(input_values, input):
+            print '\n\n'
+            print '/' * 200
+            print 'input_values:\t', input_values
+            print '/' * 200
+            print '\n\n'
             value = input_values[input.name]
             if isinstance(input, DataToolParameter) and input.multiple:
                 dataset_instances = DatasetListWrapper.to_dataset_instances(value)

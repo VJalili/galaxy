@@ -408,6 +408,9 @@ class ToolsController(BaseAPIController, UsesVisualizationMixin):
         POST /api/tools
         Executes tool using specified inputs and returns tool's outputs.
         """
+        print '\n\n\n{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{'
+        print 'payload:\t', payload
+        print '\n\n\n'
         tool_id = payload.get("tool_id")
         if tool_id in PROTECTED_TOOLS:
             raise exceptions.RequestParameterInvalidException("Cannot execute tool [%s] directly, must use alternative endpoint." % tool_id)
@@ -466,6 +469,8 @@ class ToolsController(BaseAPIController, UsesVisualizationMixin):
         # TODO: handle dbkeys
         params = util.Params(inputs, sanitize=False)
         incoming = params.__dict__
+
+        print '\n\n########### incoming:\t', incoming, '\n\n'
 
         # use_cached_job can be passed in via the top-level payload or among the tool inputs.
         # I think it should be a top-level parameter, but because the selector is implemented

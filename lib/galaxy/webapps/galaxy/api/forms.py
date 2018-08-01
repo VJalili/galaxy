@@ -41,7 +41,7 @@ class FormDefinitionAPIController(BaseAPIController):
             decoded_form_definition_id = trans.security.decode_id(form_definition_id)
         except TypeError:
             trans.response.status = 400
-            return "Malformed form definition id ( %s ) specified, unable to decode." % str(form_definition_id)
+            return "Malformed form definition id ( %s ) specified, unable to decode. BBBBBBBBBB" % str(form_definition_id)
         try:
             form_definition = trans.sa_session.query(trans.app.model.FormDefinition).get(decoded_form_definition_id)
         except Exception:

@@ -411,6 +411,9 @@ class AbstractToolBox(Dictifiable, ManagesIntegratedToolPanelMixin):
             raise AssertionError("Cannot specify get_tool with both get_all_versions and exact as True")
 
         if "/repos/" in tool_id:  # test if tool came from a toolshed
+
+            print '\n.............  1'
+
             tool_id_without_tool_shed = tool_id.split("/repos/")[1]
             available_tool_sheds = [urlparse(_) for _ in self.app.tool_shed_registry.tool_sheds.values()]
             available_tool_sheds = [url.geturl().replace(url.scheme + "://", '', 1) for url in available_tool_sheds]
@@ -419,15 +422,29 @@ class AbstractToolBox(Dictifiable, ManagesIntegratedToolPanelMixin):
                 tool_ids.remove(tool_id)
             tool_ids.insert(0, tool_id)
         else:
+
+            print '\n.............  2'
+
             tool_ids = [tool_id]
         for tool_id in tool_ids:
+
+            print '\n.............  tool id:\t', tool_id
+
             if tool_id in self._tools_by_id and not get_all_versions:
+
+                print '\n.............  3'
+
                 # tool_id exactly matches an available tool by id (which is 'old' tool_id or guid)
                 if not tool_version:
+                    print '\n.............  3.1'
                     return self._tools_by_id[tool_id]
                 elif tool_version in self._tool_versions_by_id[tool_id]:
+                    print '\n.............  3.2'
                     return self._tool_versions_by_id[tool_id][tool_version]
             elif exact:
+
+                print '\n.............  4'
+
                 # We're looking for an exact match, so we skip lineage and
                 # versionless mapping, though we may want to check duplicate
                 # toolsheds
@@ -441,6 +458,9 @@ class AbstractToolBox(Dictifiable, ManagesIntegratedToolPanelMixin):
                     lineage_tool = self._tool_from_lineage_version(lineage_tool_version)
                     if lineage_tool:
                         rval.append(lineage_tool)
+
+            print '\n.............  rval:\t', rval
+
             if not rval:
                 # still no tool, do a deeper search and try to match by old ids
                 for tool in self._tools_by_id.values():
@@ -783,6 +803,16 @@ class AbstractToolBox(Dictifiable, ManagesIntegratedToolPanelMixin):
         return tool
 
     def register_tool(self, tool):
+
+        if tool.id == 'upload1' or tool.id == 'download_to_cloud':
+            print '\n\n\n\n'
+            print '\ttool id:\t', tool.id, '\n'
+            import traceback
+            for line in traceback.format_stack():
+                print(line.strip())
+            print '\n\n\n\n'
+            # print '\n\n/////////////////  in register tool\t tool id: {}\n\n'.format(tool.id)
+
         tool_id = tool.id
         version = tool.version or None
         if tool_id not in self._tool_versions_by_id:

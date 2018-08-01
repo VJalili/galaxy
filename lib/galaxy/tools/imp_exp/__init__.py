@@ -220,6 +220,7 @@ class JobImportHistoryArchiveWrapper(UsesAnnotations):
                     imported_job.traceback = job_attrs.get('traceback', None)
                     imported_job.stdout = job_attrs.get('stdout', None)
                     imported_job.stderr = job_attrs.get('stderr', None)
+                    print '-/' * 500
                     imported_job.command_line = job_attrs.get('command_line', None)
                     try:
                         imported_job.create_time = datetime.datetime.strptime(job_attrs["create_time"], "%Y-%m-%dT%H:%M:%S.%f")

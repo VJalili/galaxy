@@ -1016,6 +1016,7 @@ class JobWrapper(HasResourceParameters):
             # TODO: Put setting the stdout, stderr, and exit code in one place
             # (not duplicated with the finish method).
             job.set_streams(stdout, stderr)
+            log.info(stdout)
             # Let the exit code be Null if one is not provided:
             if (exit_code is not None):
                 job.exit_code = exit_code
@@ -1378,6 +1379,7 @@ class JobWrapper(HasResourceParameters):
 
         # Shrink streams and ensure unicode.
         job.set_streams(job.stdout, job.stderr)
+        log.info(stdout)
 
         # The exit code will be null if there is no exit code to be set.
         # This is so that we don't assign an exit code, such as 0, that

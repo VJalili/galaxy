@@ -460,5 +460,5 @@ def __decode_id(trans, workflow_id, model_type="workflow"):
     try:
         return trans.security.decode_id(workflow_id)
     except Exception:
-        message = "Malformed %s id ( %s ) specified, unable to decode" % (model_type, workflow_id)
+        message = "Malformed %s id ( %s ) specified, unable to decode CCCCCCCCCCCCCCC" % (model_type, workflow_id)
         raise exceptions.MalformedId(message)

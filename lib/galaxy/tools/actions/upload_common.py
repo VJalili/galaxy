@@ -384,6 +384,11 @@ def create_job(trans, params, tool, json_file_path, outputs, folder=None, histor
     """
     Create the upload job.
     """
+    print '\n\n\n'
+    import traceback
+    for line in traceback.format_stack():
+        print(line.strip())
+    print '\n\n~~~~~~~~~~~~~~~~ tool:\t', tool, '\t\ttype:\t', type(tool), '\n\n'
     job = trans.app.model.Job()
     galaxy_session = trans.get_galaxy_session()
     if type(galaxy_session) == trans.model.GalaxySession:

@@ -1024,6 +1024,9 @@ class ConfiguresGalaxyMixin(object):
         tool_configs = self.config.tool_configs
         if self.config.migrated_tools_config not in tool_configs:
             tool_configs.append(self.config.migrated_tools_config)
+
+        print '\n\n************ tool path:\t{}\ntool configs:{}\n\n'.format(self.config.tool_path, tool_configs)
+
         self.toolbox = tools.ToolBox(tool_configs, self.config.tool_path, self)
         galaxy_root_dir = os.path.abspath(self.config.root)
         file_path = os.path.abspath(getattr(self.config, "file_path"))

@@ -1372,6 +1372,10 @@ class Tool(Dictifiable):
             err_data = {key: value for d in all_errors for (key, value) in d.items()}
             raise exceptions.MessageException(', '.join(msg for msg in err_data.values()), err_data=err_data)
         else:
+            print '\n\n\n[\n'
+            print 'incoming:\t', incoming
+            print 'all_params:\t', all_params
+            print '\n]\n\n\n'
             mapping_params = MappingParameters(incoming, all_params)
             completed_jobs = {}
             for i, param in enumerate(all_params):

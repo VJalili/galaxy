@@ -5,6 +5,8 @@ Manager and serializer for cloud-based storages.
 import datetime
 import logging
 
+from galaxy import model
+from galaxy import util
 from galaxy.exceptions import (
     AuthenticationFailed,
     ItemAccessibilityException,
@@ -37,6 +39,8 @@ SINGED_URL_TTL = 3600
 
 
 class CloudManager(sharable.SharableModelManager):
+
+    model_class = model.History
 
     def __init__(self, app, *args, **kwargs):
         super(CloudManager, self).__init__(app, *args, **kwargs)
@@ -272,22 +276,71 @@ class CloudManager(sharable.SharableModelManager):
         :rtype:                     list
         :return:                    A list of labels for the objects that were uploaded.
         """
-        if CloudProviderFactory is None:
-            raise Exception(NO_CLOUDBRIDGE_ERROR_MESSAGE)
-        connection = self._configure_provider(provider, credentials)
+        print '\n\n>>>>>>>>>>\n'
+        # job = trans.app.model.Job()
+        # print 'job:\t', job
+        # galaxy_session = trans.get_galaxy_session()
+        # if type(galaxy_session) == trans.model.GalaxySession:
+        #     job.session_id = galaxy_session.id
+        # if trans.user is not None:
+        #     job.user_id = trans.user.id
+        # trans.sa_session.add(job)
+        # trans.sa_session.flush()
+        # trans.app.job_manager.job_queue.put(job.id, None)# job.tool_id)
 
-        bucket_obj = connection.object_store.get(bucket)
-        if bucket_obj is None:
-            raise ObjectNotFound("Could not find the specified bucket `{}`.".format(bucket))
+        d2c = trans.app.toolbox.get_tool('download_to_cloud', "0.1.0")
+        # TODO: if not d2c: then throw an error saying the tool is not found
 
-        history = trans.sa_session.query(trans.app.model.History).get(history_id)
-        downloaded = []
-        for hda in history.datasets:
-            if dataset_ids is None or hda.dataset.id in dataset_ids:
-                object_label = hda.name
-                if overwrite_existing is False and bucket_obj.get(object_label) is not None:
-                    object_label += "-" + datetime.datetime.now().strftime("%y-%m-%d-%H-%M-%S")
-                created_obj = bucket_obj.create_object(object_label)
-                created_obj.upload_from_file(hda.dataset.get_file_name())
-                downloaded.append(object_label)
-        return downloaded
+        print '------------------------------------------------ type tool:\t', type(d2c)
+
+        print '************\tid:\t', d2c.id
+        print '************\tuser:\t', trans.user
+        print '************\thistory id:\t', history_id
+        history = self.get_accessible(history_id, trans.user)
+        print '&' * 100, 'history:\t', history
+        # TODO: properly populate inputs.
+        inputs = {
+            "provider": provider,
+            "access": "dlkfjs",
+            "secret": "ccccc",
+            "bucket": bucket,
+            "object": "qqqqq"}
+        params = util.Params(inputs, sanitize=False)
+        incoming = params.__dict__
+        # vars = d2c.handle_input(trans, incoming, history=history, use_cached_job=False)
+        # print 'vars:\t', vars
+
+        job = d2c.execute(trans, incoming, history=history)
+        print 'X' * 50, '\taa:\t', job
+
+
+        # upload = trans.app.toolbox.get_tool('upload1')
+        # state = upload.new_state(trans)
+        # tool_params = state.inputs
+        # dataset_upload_inputs = []
+        # for input in upload.inputs.values():
+        #     print 'input:\t', input
+
+
+        print '\n\n<<<<<<<<<\n'
+        return None
+
+        # if CloudProviderFactory is None:
+        #     raise Exception(NO_CLOUDBRIDGE_ERROR_MESSAGE)
+        # connection = self._configure_provider(provider, credentials)
+        #
+        # bucket_obj = connection.object_store.get(bucket)
+        # if bucket_obj is None:
+        #     raise ObjectNotFound("Could not find the specified bucket `{}`.".format(bucket))
+        #
+        # history = trans.sa_session.query(trans.app.model.History).get(history_id)
+        # downloaded = []
+        # for hda in history.datasets:
+        #     if dataset_ids is None or hda.dataset.id in dataset_ids:
+        #         object_label = hda.name
+        #         if overwrite_existing is False and bucket_obj.get(object_label) is not None:
+        #             object_label += "-" + datetime.datetime.now().strftime("%y-%m-%d-%H-%M-%S")
+        #         created_obj = bucket_obj.create_object(object_label)
+        #         created_obj.upload_from_file(hda.dataset.get_file_name())
+        #         downloaded.append(object_label)
+        # return downloaded

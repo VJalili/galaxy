@@ -145,6 +145,10 @@ class ExecutionSlice(object):
 class ExecutionTracker(object):
 
     def __init__(self, trans, tool, mapping_params, collection_info):
+        print '||||||||||||||||'
+        print 'mapping params:\t', mapping_params
+        print '||||||||||||||||'
+
         # Known ahead of time...
         self.trans = trans
         self.tool = tool

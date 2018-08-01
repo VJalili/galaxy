@@ -41,6 +41,11 @@ class BaseUploadToolAction(ToolAction):
 class UploadToolAction(BaseUploadToolAction):
 
     def _setup_job(self, tool, trans, incoming, dataset_upload_inputs, history):
+        print '\n\nbbbbbbbbbbbbbbbbbbb\n'
+        print '\nincoming:\t', incoming
+        print '\ninputs:\t', dataset_upload_inputs
+        print '\nhistory:\t', history
+        print '\n\nbbbbbbbbbbbbbbbbbbb\n\n'
         check_timer = ExecutionTimer()
         uploaded_datasets = upload_common.get_uploaded_datasets(trans, '', incoming, dataset_upload_inputs, history=history)
 

@@ -767,6 +767,10 @@ class HistoryContentsController(BaseAPIController, UsesLibraryMixin, UsesLibrary
         """
         rval = []
 
+        print '#' * 100
+        print 'looking for this history:\t', history_id
+        print '#' * 100
+
         history = self.history_manager.get_accessible(self.decode_id(history_id), trans.user,
             current_history=trans.history)
 
