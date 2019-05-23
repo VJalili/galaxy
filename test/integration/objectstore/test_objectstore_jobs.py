@@ -56,7 +56,23 @@ class ObjectStoreJobsIntegrationTestCase(integration_util.IntegrationTestCase):
         super(ObjectStoreJobsIntegrationTestCase, self).setUp()
         self.dataset_populator = DatasetPopulator(self.galaxy_interactor)
 
-    def test_tool_simple_constructs(self):
+    def _create_ten_dummy_datasets(self):
+        """
+        Runs the /test/functional/tools/create_10.xml tool, which creates
+        ten dummy datasets each named sequentially, and containing their
+        sequence number.
+
+        The persistence location of the files is determined by objectstore
+        based on the configuration specified in the following variable:
+
+            `DISTRIBUTED_OBJECT_STORE_CONFIG_TEMPLATE`
+
+        :return: returns a tuple of three file paths, each representing a
+        backend of the hierarchical objectstore defined in the following
+        variable:
+
+            `DISTRIBUTED_OBJECT_STORE_CONFIG_TEMPLATE`
+        """
         with self.dataset_populator.test_history() as history_id:
             hda1 = self.dataset_populator.new_dataset(history_id, content="1 2 3")
             create_10_inputs = {
@@ -71,9 +87,32 @@ class ObjectStoreJobsIntegrationTestCase(integration_util.IntegrationTestCase):
             )
             self.dataset_populator.wait_for_history(history_id)
 
-        files_1_count = _files_count(self.files1_path)
-        files_2_count = _files_count(self.files2_path)
-        files_3_count = _files_count(self.files3_path)
+        return self.files1_path, self.files2_path, self.files3_path
+
+    def test_file_counts_in_each_objectstore_backend(self):
+        """
+        According to the ObjectStore configuration given in the
+        `DISTRIBUTED_OBJECT_STORE_CONFIG_TEMPLATE` variable, datasets
+        can be stored on three backends, named:
+            -   primary/files1;
+            -   primary/files2;
+            -   secondary/files3.
+
+        Objectstore _randomly_ distributes tools outputs on
+        `primary/files1` and `primary/files2`, and will use
+        `secondary/files3` and both `primary` backends fail.
+
+        This test runs a tools that creates ten dummy datasets,
+        and asserts if ObjectStore correctly creates ten files
+        in `primary/files1` and `primary/files2`, and none in
+        `secondary/files3`, assuming it will not fail persisting
+        data in `primary` backend.
+        """
+        path1, path2, path3 = self._create_ten_dummy_datasets()
+
+        files_1_count = _files_count(path1)
+        files_2_count = _files_count(path2)
+        files_3_count = _files_count(path3)
 
         # Ensure no files written to the secondary/inactive hierarchical disk store.
         assert files_3_count == 0
@@ -82,8 +121,7 @@ class ObjectStoreJobsIntegrationTestCase(integration_util.IntegrationTestCase):
         # stores (it will have either 10 or 11 depending on whether the input was also
         # written there. The other disk store may or may not have the input file so should
         # have at most one file.
-        assert (files_1_count >= 10) or (files_2_count >= 10)
-        assert (files_1_count <= 1) or (files_2_count <= 1)
+        assert (files_1_count + files_2_count == 10) or (files_1_count + files_2_count == 11)
 
         # Other sanity checks on the test - just make sure the test was setup as intended
         # and not actually testing object store behavior.
