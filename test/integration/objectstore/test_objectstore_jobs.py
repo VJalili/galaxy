@@ -79,7 +79,7 @@ class ObjectStoreJobsIntegrationTestCase(integration_util.IntegrationTestCase):
         assert files_3_count == 0
 
         # Ensure the 10 inputs were written to one of the distributed object store's disk
-        # stores (it will have either 10 or 11 depeending on whether the input was also
+        # stores (it will have either 10 or 11 depending on whether the input was also
         # written there. The other disk store may or may not have the input file so should
         # have at most one file.
         assert (files_1_count >= 10) or (files_2_count >= 10)
