@@ -2150,6 +2150,12 @@ class Dataset(StorableObject, RepresentById):
         self.sources = []
         self.hashes = []
 
+        self.media = None
+
+    def assign_media(self, user, authnz_manager=None):
+        self.media = 123
+        return self
+
     def in_ready_state(self):
         return self.state in self.ready_states
 
