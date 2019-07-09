@@ -173,9 +173,11 @@ class ModelManager(object):
 
         self.session().add(item)
         if flush:
-            print '\n\n--------- [before flush] expected true, got:', hasattr(item.dataset, "media")
+            print '\n\n--------- [before flush] expected true, got:', hasattr(item.dataset, "media"), '\tid: ', item.dataset.id
+            media = item.dataset.media
             self.session().flush()
-            print '--------- [after flush]  expected true, got:', hasattr(item.dataset, "media"), '\n\n'
+            item.dataset.media = media
+            print '--------- [after flush]  expected true, got:', hasattr(item.dataset, "media"), '\tid: ', item.dataset.id, '\n\n'
         return item
 
     # .... query foundation wrapper
