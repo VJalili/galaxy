@@ -114,8 +114,6 @@
             return "datasets"
         elif controller == "page":
             return "pages"
-        elif controller == "visualization":
-            return "visualizations"
         else:
             return controller
     %>

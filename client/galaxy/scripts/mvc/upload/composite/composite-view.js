@@ -23,13 +23,6 @@ export default Backbone.View.extend({
         this.setElement(this._template());
 
         // create button section
-        this.btnReset = new Ui.Button({
-            id: "btn-reset",
-            title: _l("Reset"),
-            onclick: function() {
-                self._eventReset();
-            }
-        });
         this.btnStart = new Ui.Button({
             title: _l("Start"),
             onclick: function() {
@@ -44,7 +37,7 @@ export default Backbone.View.extend({
         });
 
         // append buttons to dom
-        _.each([this.btnReset, this.btnStart, this.btnClose], button => {
+        _.each([this.btnStart, this.btnClose], button => {
             self.$(".upload-buttons").prepend(button.$el);
         });
 
@@ -62,8 +55,7 @@ export default Backbone.View.extend({
                     _.each(details.composite_files, item => {
                         self.collection.add({
                             id: self.collection.size(),
-                            file_desc: item.description || item.name,
-                            optional: item.optional
+                            file_desc: item.description || item.name
                         });
                     });
                 }
@@ -113,11 +105,7 @@ export default Backbone.View.extend({
             this.select_genome.enable();
             this.select_extension.enable();
         }
-        if (
-            this.collection.where({ status: "ready" }).length + this.collection.where({ optional: true }).length ==
-                this.collection.length &&
-            this.collection.length > 0
-        ) {
+        if (this.collection.where({ status: "ready" }).length == this.collection.length && this.collection.length > 0) {
             this.btnStart.enable();
             this.btnStart.$el.addClass("btn-primary");
         } else {
@@ -163,16 +151,6 @@ export default Backbone.View.extend({
         });
     },
 
-    /** Remove all */
-    _eventReset: function() {
-        if (this.collection.where({ status: "running" }).length == 0) {
-            this.collection.reset();
-            this.select_extension.value(this.options.default_extension);
-            this.select_genome.value(this.options.default_genome);
-            this.render();
-        }
-    },
-
     /** Refresh progress state */
     _eventProgress: function(percentage) {
         this.collection.each(it => {
@@ -182,7 +160,7 @@ export default Backbone.View.extend({
 
     /** Refresh success state */
     _eventSuccess: function(message) {
-        const Galaxy = getGalaxyInstance();
+        let Galaxy = getGalaxyInstance();
         this.collection.each(it => {
             it.set("status", "success");
         });

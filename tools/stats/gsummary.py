@@ -13,7 +13,7 @@ except ImportError:
 
 def stop_err(msg):
     sys.stderr.write(msg)
-    sys.exit(1)
+    sys.exit()
 
 
 def S3_METHODS(all="key"):

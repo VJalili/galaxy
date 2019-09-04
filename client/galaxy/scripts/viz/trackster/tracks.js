@@ -783,11 +783,11 @@ extend(DrawableGroup.prototype, Drawable.prototype, DrawableCollection.prototype
                 //
                 this.filters_manager.remove_all();
                 for (var filter_name in shared_filters) {
-                    const filters = shared_filters[filter_name];
+                    let filters = shared_filters[filter_name];
                     if (filters.length === num_feature_tracks) {
                         // Add new filter.
                         // FIXME: can filter.copy() be used?
-                        const new_filter = new filters_mod.NumberFilter({
+                        let new_filter = new filters_mod.NumberFilter({
                             name: filters[0].name,
                             index: filters[0].index
                         });
@@ -1000,9 +1000,6 @@ var TracksterView = Backbone.View.extend({
                 });
             });
 
-        // We break out of the parent container with nav (and potentially other
-        // things?) so we need to override any overflow settings here.
-        parent_element.css("overflow", "visible");
         // Navigation at top
         this.nav_container = $("<div/>")
             .addClass("trackster-nav-container")
@@ -1950,7 +1947,7 @@ var TracksterToolView = Backbone.View.extend({
      */
     run_on_dataset: function() {
         var tool = this.model;
-        const Galaxy = getGalaxyInstance();
+        let Galaxy = getGalaxyInstance();
         this.run(
             // URL params.
             {
@@ -2450,7 +2447,7 @@ extend(Track.prototype, Drawable.prototype, {
             title: _l("Tool parameter space visualization"),
             css_class: "arrow-split",
             on_click_fn: track => {
-                const Galaxy = getGalaxyInstance();
+                let Galaxy = getGalaxyInstance();
 
                 var html = `
                     <strong>Tool</strong>:${track.tool.get("name")}<br/>
@@ -2717,7 +2714,7 @@ extend(Track.prototype, Drawable.prototype, {
                         $("<a href='javascript:void(0);'></a>")
                             .text("View error")
                             .click(() => {
-                                const Galaxy = getGalaxyInstance();
+                                let Galaxy = getGalaxyInstance();
                                 Galaxy.modal.show({
                                     title: _l("Trackster Error"),
                                     body: `<pre>${result.message}</pre>`,

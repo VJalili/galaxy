@@ -8,27 +8,21 @@ from __future__ import print_function
 
 import datetime
 import logging
+import sys
 
-from sqlalchemy import (
-    Boolean,
-    Column,
-    DateTime,
-    ForeignKey,
-    Integer,
-    MetaData,
-    Table,
-    TEXT
-)
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, MetaData, Table, TEXT
+from sqlalchemy.exc import NoSuchTableError
 
 from galaxy.model.custom_types import TrimmedString
-from galaxy.model.migrate.versions.util import (
-    add_column,
-    create_table,
-    drop_column
-)
 
-log = logging.getLogger(__name__)
 now = datetime.datetime.utcnow
+log = logging.getLogger(__name__)
+log.setLevel(logging.DEBUG)
+handler = logging.StreamHandler(sys.stdout)
+format = "%(name)s %(levelname)s %(asctime)s %(message)s"
+formatter = logging.Formatter(format)
+handler.setFormatter(formatter)
+log.addHandler(handler)
 metadata = MetaData()
 
 UserAddress_table = Table("user_address", metadata,
@@ -55,19 +49,38 @@ def upgrade(migrate_engine):
     metadata.reflect()
 
     # Add all of the new tables above
-    create_table(UserAddress_table)
+    try:
+        UserAddress_table.create()
+    except Exception:
+        log.exception("Creating user_address table failed.")
     # Add 1 column to the request_type table
-    col = Column("deleted", Boolean, index=True, default=False)
-    add_column(col, 'request_type', metadata, index_name='ix_request_type_deleted')
+    try:
+        RequestType_table = Table("request_type", metadata, autoload=True)
+    except NoSuchTableError:
+        RequestType_table = None
+        log.debug("Failed loading table request_type")
+    if RequestType_table is not None:
+        try:
+            col = Column("deleted", Boolean, index=True, default=False)
+            col.create(RequestType_table, index_name='ix_request_type_deleted')
+            assert col is RequestType_table.c.deleted
+        except Exception:
+            log.exception("Adding column 'deleted' to request_type table failed.")
 
     # Delete the submitted column
     # This fails for sqlite, so skip the drop -- no conflicts in the future
-    Request_table = Table("request", metadata, autoload=True)
-    # SQLAlchemy Migrate has a bug when dropping a boolean column in SQLite
-    if migrate_engine.name != 'sqlite':
-        drop_column('submitted', Request_table)
-    col = Column("state", TrimmedString(255), index=True)
-    add_column(col, Request_table, metadata, index_name='ix_request_state')
+    try:
+        Request_table = Table("request", metadata, autoload=True)
+    except NoSuchTableError:
+        Request_table = None
+        log.debug("Failed loading table request")
+    if Request_table is not None:
+        # SQLAlchemy Migrate has a bug when dropping a boolean column in SQLite
+        if migrate_engine.name != 'sqlite':
+            Request_table.c.submitted.drop()
+        col = Column("state", TrimmedString(255), index=True)
+        col.create(Request_table, index_name='ix_request_state')
+        assert col is Request_table.c.state
 
 
 def downgrade(migrate_engine):

@@ -1,40 +1,26 @@
+// search bar, see: scripts/jq-plugins/ui/search-input.js
 .search-input {
-    @extend .mb-2;
-    ::placeholder {
-        color: $text-muted;
+    .search-query {
+        width: 100%;
+        padding-right: 24px;
     }
     .search-clear,
     .search-loading {
-        @extend .mr-2;
+        // it places the icons on the right of the bar (and puts the lotion on its skin)
         position: relative;
         display: inline-block;
+
         float: right;
         margin-top: -25px;
+        margin-right: 4px;
+
         font-size: 1.4em;
-        color: $text-muted;
+        line-height: 23px;
+        color: grey;
     }
+
     .search-clear:hover {
-        color: $brand-info;
+        color: $link-color;
         cursor: pointer;
-    }
-    .search-loading {
-        display: none;
-    }
-    .search-query {
-        @extend .px-3;
-        @extend .py-1;
-        width: 100%;
-        display: inline-block;
-        font-size: $font-size-base;
-        line-height: $line-height-base;
-        color: $text-color;
-        border: $border-default;
-        @include border-radius($border-radius-extralarge);
-        max-width: auto;
-        background: $white;
-    }
-    .search-query:focus {
-        border-color: $brand-info;
-        outline: 0;
     }
 }

@@ -1,7 +1,4 @@
-from __future__ import absolute_import
-
 import logging
-from collections import OrderedDict
 
 from galaxy import model
 from galaxy.exceptions import (
@@ -21,6 +18,7 @@ from galaxy.model.dataset_collections.matching import MatchingCollections
 from galaxy.model.dataset_collections.registry import DATASET_COLLECTION_TYPES_REGISTRY
 from galaxy.model.dataset_collections.type_description import COLLECTION_TYPE_DESCRIPTION_FACTORY
 from galaxy.util import (
+    odict,
     validation
 )
 
@@ -360,7 +358,7 @@ class DatasetCollectionManager(object):
         if elements is self.ELEMENTS_UNINITIALIZED:
             return
 
-        new_elements = OrderedDict()
+        new_elements = odict.odict()
         for key, element in elements.items():
             if isinstance(element, model.DatasetCollection):
                 continue
@@ -369,7 +367,7 @@ class DatasetCollectionManager(object):
                 continue
 
             # element is a dict with src new_collection and
-            # and OrderedDict of named elements
+            # and odict of named elements
             collection_type = element.get("collection_type", None)
             sub_elements = element["elements"]
             collection = self.create_dataset_collection(
@@ -383,7 +381,7 @@ class DatasetCollectionManager(object):
         elements.update(new_elements)
 
     def __load_elements(self, trans, element_identifiers, hide_source_items=False, copy_elements=False):
-        elements = OrderedDict()
+        elements = odict.odict()
         for element_identifier in element_identifiers:
             elements[element_identifier["name"]] = self.__load_element(trans,
                                                                        element_identifier=element_identifier,
@@ -479,7 +477,7 @@ class DatasetCollectionManager(object):
 
     def _build_elements_from_rule_data(self, collection_type_description, rule_set, data, sources, handle_dataset):
         identifier_columns = rule_set.identifier_columns
-        elements = OrderedDict()
+        elements = odict.odict()
         for data_index, row_data in enumerate(data):
             # For each row, find place in depth for this element.
             collection_type_at_depth = collection_type_description
@@ -510,7 +508,7 @@ class DatasetCollectionManager(object):
                         sub_collection = {}
                         sub_collection["src"] = "new_collection"
                         sub_collection["collection_type"] = collection_type_at_depth.collection_type
-                        sub_collection["elements"] = OrderedDict()
+                        sub_collection["elements"] = odict.odict()
                         elements_at_depth[identifier] = sub_collection
                         elements_at_depth = sub_collection["elements"]
 

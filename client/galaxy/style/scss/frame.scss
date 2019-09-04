@@ -1,5 +1,5 @@
 $frame-zindex: 1000;
-$frame-default-border: $border-color;
+$frame-default-border: $border-default-color;
 
 .galaxy-frame {
     .corner {
@@ -19,6 +19,7 @@ $frame-default-border: $border-color;
         height: 100%;
         width: 100%;
         opacity: 0.5;
+        background: $brand-dark;
         overflow: auto;
     }
 
@@ -146,6 +147,8 @@ $frame-default-border: $border-color;
             width: 16px;
             height: 16px;
             color: $brand-dark;
+            right: 0px;
+            bottom: 0px;
             text-align: center;
             line-height: 16px;
             border: 0px;

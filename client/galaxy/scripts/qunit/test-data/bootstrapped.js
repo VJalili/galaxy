@@ -9,6 +9,7 @@ export default {
         allow_library_path_paste: false,
         user_library_import_dir: null,
         terms_url: null,
+        ftp_upload_dir: null,
         library_import_dir: null,
         logo_url: null,
         enable_unique_workflow_defaults: false

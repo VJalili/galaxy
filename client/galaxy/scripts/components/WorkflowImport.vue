@@ -31,7 +31,7 @@ Vue.use(BootstrapVue);
 
 export default {
     data() {
-        const Galaxy = getGalaxyInstance();
+        let Galaxy = getGalaxyInstance();
         return {
             sourceFile: null,
             sourceURL: null,
@@ -52,7 +52,7 @@ export default {
             if (!this.sourceFile && !this.sourceURL) {
                 this.errorMessage = "You must provide a workflow archive URL or file.";
             } else {
-                const formData = new FormData();
+                let formData = new FormData();
                 formData.append("archive_file", this.sourceFile);
                 formData.append("archive_source", this.sourceURL);
                 axios
@@ -63,7 +63,7 @@ export default {
                         }&status=success`;
                     })
                     .catch(error => {
-                        const message = error.response.data && error.response.data.err_msg;
+                        let message = error.response.data && error.response.data.err_msg;
                         this.errorMessage = message || "Import failed for an unknown reason.";
                     });
             }

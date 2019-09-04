@@ -70,7 +70,7 @@
     </script>
 
     %if t.webapp.name == 'galaxy' and app.config.ga_code:
-        ${galaxy_client.config_google_analytics(app.config.ga_code)}
+        ${galaxy_client.config_google_analytics(app)}
     %endif
 
 </%def>
@@ -166,7 +166,7 @@
                 </div>
             </noscript>
         %endif
-        <div id="everything">
+        <div id="everything" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
             
             ## Background displays first
             <div id="background"></div>
@@ -195,7 +195,7 @@
                     <div id="left">
                         ${self.left_panel()}
                         <div class="unified-panel-footer">
-                            <div id="left-panel-collapse" class="panel-collapse left"></div>
+                            <div id="left-panel-collapse" class="panel-collapse"></div>
                             <div id="left-panel-drag" class="drag"></div>
                         </div>
                     </div><!--end left-->

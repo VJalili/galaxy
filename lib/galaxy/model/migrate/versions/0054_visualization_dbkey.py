@@ -6,18 +6,9 @@ from __future__ import print_function
 import logging
 from json import loads
 
-from sqlalchemy import (
-    Column,
-    MetaData,
-    Table,
-    TEXT
-)
+from sqlalchemy import Column, Index, MetaData, Table, TEXT
 
-from galaxy.model.migrate.versions.util import (
-    add_column,
-    add_index,
-    drop_column
-)
+from galaxy.model.migrate.versions.util import add_column, drop_column
 
 log = logging.getLogger(__name__)
 metadata = MetaData()
@@ -33,13 +24,14 @@ def upgrade(migrate_engine):
 
     # Create dbkey columns.
     x = Column("dbkey", TEXT)
-    add_column(x, Visualization_table, metadata)
+    add_column(x, Visualization_table)
     y = Column("dbkey", TEXT)
-    add_column(y, Visualization_revision_table, metadata)
-    # Indexes need to be added separately because MySQL cannot index a TEXT/BLOB
-    # column without specifying mysql_length
-    add_index("ix_visualization_dbkey", Visualization_table, 'dbkey')
-    add_index("ix_visualization_revision_dbkey", Visualization_revision_table, 'dbkey')
+    add_column(y, Visualization_revision_table)
+    # Manually create indexes for compatability w/ mysql_length.
+    xi = Index("ix_visualization_dbkey", Visualization_table.c.dbkey, mysql_length=200)
+    xi.create()
+    yi = Index("ix_visualization_revision_dbkey", Visualization_revision_table.c.dbkey, mysql_length=200)
+    yi.create()
 
     all_viz = migrate_engine.execute("SELECT visualization.id as viz_id, visualization_revision.id as viz_rev_id, visualization_revision.config FROM visualization_revision \
                     LEFT JOIN visualization ON visualization.id=visualization_revision.visualization_id")

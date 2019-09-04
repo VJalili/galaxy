@@ -1,42 +1,18 @@
-from __future__ import print_function
-
 import datetime
 import errno
 import logging
 import os
 import time
 
-from sqlalchemy import (
-    and_,
-    Boolean,
-    Column,
-    DateTime,
-    false,
-    ForeignKey,
-    Integer,
-    MetaData,
-    not_,
-    Numeric,
-    Table,
-    TEXT,
-    true
-)
-from sqlalchemy.orm import (
-    backref,
-    mapper,
-    relation,
-    scoped_session,
-    sessionmaker
-)
+from sqlalchemy import and_, Boolean, Column, DateTime, false, ForeignKey, Integer, MetaData, not_, Numeric, Table, TEXT, true
+from sqlalchemy.orm import backref, mapper, relation, scoped_session, sessionmaker
 
-from galaxy.model.custom_types import (
-    MetadataType,
-    TrimmedString
-)
+from galaxy.model.custom_types import MetadataType, TrimmedString
 from galaxy.model.metadata import MetadataCollection
 from galaxy.util.bunch import Bunch
 
 log = logging.getLogger(__name__)
+log.setLevel(logging.DEBUG)
 now = datetime.datetime.utcnow
 metadata = MetaData()
 context = scoped_session(sessionmaker(autoflush=False, autocommit=True))
@@ -714,9 +690,7 @@ def __guess_dataset_by_filename(filename):
 
 
 def upgrade(migrate_engine):
-    print(__doc__)
     metadata.bind = migrate_engine
-
     log.debug("Fixing a discrepancy concerning deleted shared history items.")
     affected_items = 0
     start_time = time.time()
@@ -760,4 +734,5 @@ def upgrade(migrate_engine):
 
 
 def downgrade(migrate_engine):
-    pass
+    metadata.bind = migrate_engine
+    log.debug("Downgrade is not possible.")

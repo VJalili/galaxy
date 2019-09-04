@@ -11,7 +11,6 @@ import sys
 
 import bx.wiggle
 
-from galaxy.util import unicodify
 from galaxy.util.ucsc import (
     UCSCLimitException,
     UCSCOutWrapper
@@ -20,7 +19,7 @@ from galaxy.util.ucsc import (
 
 def stop_err(msg):
     sys.stderr.write(msg)
-    sys.exit(1)
+    sys.exit()
 
 
 def main():
@@ -41,7 +40,7 @@ def main():
         # Wiggle data was truncated, at the very least need to warn the user.
         print('Encountered message from UCSC: "Reached output limit of 100000 data values", so be aware your data was truncated.')
     except ValueError as e:
-        stop_err(unicodify(e))
+        stop_err(str(e))
     finally:
         in_file.close()
         out_file.close()

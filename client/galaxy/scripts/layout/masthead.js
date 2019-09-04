@@ -6,11 +6,11 @@ import QuotaMeter from "mvc/user/user-quotameter";
 import { getGalaxyInstance } from "app";
 
 /** Masthead **/
-const View = Backbone.View.extend({
+var View = Backbone.View.extend({
     initialize: function(options) {
-        const Galaxy = getGalaxyInstance();
+        let Galaxy = getGalaxyInstance();
 
-        const self = this;
+        var self = this;
         this.options = options;
         this.setElement(this._template());
         this.$navbarBrandLink = this.$(".navbar-brand");
@@ -53,7 +53,7 @@ const View = Backbone.View.extend({
         // loop through beforeunload functions if the user attempts to unload the page
         $(window)
             .on("click", e => {
-                const $download_link = $(e.target).closest("a[download]");
+                var $download_link = $(e.target).closest("a[download]");
                 if ($download_link.length == 1) {
                     if ($("iframe[id=download]").length === 0) {
                         $("body").append(
@@ -67,9 +67,9 @@ const View = Backbone.View.extend({
                 }
             })
             .on("beforeunload", () => {
-                let text = "";
+                var text = "";
                 self.collection.each(model => {
-                    const q = model.get("onbeforeunload") && model.get("onbeforeunload")();
+                    var q = model.get("onbeforeunload") && model.get("onbeforeunload")();
                     if (q) {
                         text += `${q} `;
                     }
@@ -98,8 +98,8 @@ const View = Backbone.View.extend({
     _template: function() {
         return `
             <nav id="masthead" class="navbar navbar-expand justify-content-center navbar-dark">
-                <a class="navbar-brand" aria-label="homepage">
-                    <img alt="logo" class="navbar-brand-image"/>
+                <a class="navbar-brand">
+                    <img class="navbar-brand-image"/>
                     <span class="navbar-brand-title"/>
                 </a>
                 <ul class="navbar-nav"/>

@@ -6,22 +6,12 @@ from __future__ import print_function
 import datetime
 import logging
 
-from sqlalchemy import (
-    Column,
-    DateTime,
-    ForeignKey,
-    Integer,
-    MetaData,
-    Table
-)
-
-from galaxy.model.migrate.versions.util import (
-    create_table,
-    drop_table
-)
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, MetaData, Table
 
 now = datetime.datetime.utcnow
 log = logging.getLogger(__name__)
+log.setLevel(logging.DEBUG)
+
 metadata = MetaData()
 
 # New table to log cleanup events
@@ -38,11 +28,19 @@ def upgrade(migrate_engine):
     metadata.bind = migrate_engine
     metadata.reflect()
 
-    create_table(CleanupEventUserAssociation_table)
+    try:
+        CleanupEventUserAssociation_table.create()
+        log.debug("Created cleanup_event_user_association table")
+    except Exception:
+        log.exception("Creating cleanup_event_user_association table failed.")
 
 
 def downgrade(migrate_engine):
     metadata.bind = migrate_engine
     metadata.reflect()
 
-    drop_table(CleanupEventUserAssociation_table)
+    try:
+        CleanupEventUserAssociation_table.drop()
+        log.debug("Dropped cleanup_event_user_association table")
+    except Exception:
+        log.exception("Dropping cleanup_event_user_association table failed.")

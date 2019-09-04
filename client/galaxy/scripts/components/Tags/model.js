@@ -21,9 +21,9 @@ function TagModel(props = {}) {
         enumerable: true,
         get: function() {
             if (this.text.startsWith("name:")) {
-                const { primary, contrasting, darker } = keyedColorScheme(this.text);
+                let { primary, contrasting, darker } = keyedColorScheme(this.text);
 
-                const styles = {
+                let styles = {
                     "background-color": primary,
                     color: contrasting,
                     "border-color": darker
@@ -50,7 +50,8 @@ function TagModel(props = {}) {
         enumerable: false,
         get: function() {
             if (!this.text.length) return false;
-            return this.text != "name:";
+            if (this.text == "name:") return false;
+            return true;
         }
     });
 }
@@ -81,7 +82,7 @@ export function createTag(data) {
 // Returns tags in "newTags" that aren't present in "existingTags"
 
 export const diffTags = (newTags, existingTags) => {
-    const newModels = newTags.map(createTag);
-    const existingModels = existingTags.map(createTag);
+    let newModels = newTags.map(createTag);
+    let existingModels = existingTags.map(createTag);
     return newModels.filter(tag => !existingModels.some(st => st.equals(tag)));
 };

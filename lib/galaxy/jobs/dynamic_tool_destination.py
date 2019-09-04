@@ -12,7 +12,7 @@ from functools import reduce
 from xml.etree import ElementTree as ET
 
 import numpy as np
-import yaml
+from yaml import load
 
 __version__ = '1.1.0'
 
@@ -727,7 +727,7 @@ def parse_yaml(path="/config/tool_destinations.yml",
     # Import file from path
     try:
         if test:
-            config = yaml.safe_load(path)
+            config = load(path)
         else:
             if path == "/config/tool_destinations.yml":
                 # os.path.realpath gets the path of DynamicToolDestination.py
@@ -741,7 +741,7 @@ def parse_yaml(path="/config/tool_destinations.yml",
                 opt_file = path
 
             with open(opt_file, 'r') as stream:
-                config = yaml.safe_load(stream)
+                config = load(stream)
 
         # Test imported file
         try:

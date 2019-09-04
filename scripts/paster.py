@@ -20,4 +20,8 @@ try:
 except Exception:
     sys.exit(1)
 
+if 'LOG_TEMPFILES' in os.environ:
+    from log_tempfile import TempFile
+    _log_tempfile = TempFile()
+
 serve.run()

@@ -1,5 +1,4 @@
 import logging
-from collections import OrderedDict
 
 from markupsafe import escape
 from six import string_types
@@ -16,9 +15,9 @@ from galaxy.model.item_attrs import (
     UsesItemRatings
 )
 from galaxy.util import listify, Params, parse_int, sanitize_text
+from galaxy.util.odict import odict
 from galaxy.web import url_for
-from galaxy.web.framework.helpers import grids, iff, time_ago
-from galaxy.webapps.base.controller import (
+from galaxy.web.base.controller import (
     BaseUIController,
     ERROR,
     ExportsHistoryMixin,
@@ -28,6 +27,7 @@ from galaxy.webapps.base.controller import (
     SUCCESS,
     WARNING,
 )
+from galaxy.web.framework.helpers import grids, iff, time_ago
 from ._create_history_template import render_item
 
 
@@ -98,9 +98,6 @@ class HistoryListGrid(grids.Grid):
             cols_to_filter=[columns[0], columns[3]],
             key="free-text-search", visible=False, filterable="standard")
     )
-    global_actions = [
-        grids.GridAction("Import from file", dict(controller="", action="histories/import"))
-    ]
     operations = [
         grids.GridOperation("Switch", allow_multiple=False, condition=(lambda item: not item.deleted), async_compatible=True),
         grids.GridOperation("View", allow_multiple=False, url_args=dict(controller="", action="histories/view")),
@@ -246,7 +243,7 @@ class HistoryController(BaseUIController, SharableMixin, UsesAnnotations, UsesIt
     def list_published(self, trans, **kwargs):
         return self.published_list_grid(trans, **kwargs)
 
-    @web.legacy_expose_api
+    @web.expose_api
     @web.require_login("work with multiple histories")
     def list(self, trans, **kwargs):
         """List all available histories"""
@@ -501,7 +498,7 @@ class HistoryController(BaseUIController, SharableMixin, UsesAnnotations, UsesIt
         items = []
         # First go through and group hdas by job, if there is no job they get
         # added directly to items
-        jobs = OrderedDict()
+        jobs = odict()
         for hda in history.active_datasets:
             if hda.visible is False:
                 continue
@@ -525,7 +522,7 @@ class HistoryController(BaseUIController, SharableMixin, UsesAnnotations, UsesIt
                 else:
                     jobs[job] = [(hda, None)]
         # Second, go through the jobs and connect to workflows
-        wf_invocations = OrderedDict()
+        wf_invocations = odict()
         for job, hdas in jobs.items():
             # Job is attached to a workflow step, follow it to the
             # workflow_invocation and group
@@ -658,7 +655,7 @@ class HistoryController(BaseUIController, SharableMixin, UsesAnnotations, UsesIt
             user_is_owner=user_is_owner, history_dict=history_dictionary,
             user_item_rating=user_item_rating, ave_item_rating=ave_item_rating, num_ratings=num_ratings)
 
-    @web.legacy_expose_api
+    @web.expose_api
     @web.require_login("changing default permissions")
     def permissions(self, trans, payload=None, **kwd):
         """
@@ -696,7 +693,7 @@ class HistoryController(BaseUIController, SharableMixin, UsesAnnotations, UsesIt
             trans.app.security_agent.history_set_default_permissions(history, permissions)
             return {'message': 'Default history \'%s\' dataset permissions have been changed.' % history.name}
 
-    @web.legacy_expose_api
+    @web.expose_api
     @web.require_login("make datasets private")
     def make_private(self, trans, history_id=None, all_histories=False, **kwd):
         """
@@ -1210,7 +1207,7 @@ class HistoryController(BaseUIController, SharableMixin, UsesAnnotations, UsesIt
         return
         # TODO: used in page/editor.mako
 
-    @web.legacy_expose_api
+    @web.expose_api
     @web.require_login("rename histories")
     def rename(self, trans, payload=None, **kwd):
         id = kwd.get('id')

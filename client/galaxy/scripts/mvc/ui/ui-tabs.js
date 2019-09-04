@@ -161,7 +161,6 @@ export var View = Backbone.View.extend({
                 $("<a/>")
                     .addClass("nav-link")
                     .attr("id", `tab-title-link-${options.id}`)
-                    .attr("href", "javascript:void(0);")
             );
         var $href = $tmpl.find("a");
         options.icon &&

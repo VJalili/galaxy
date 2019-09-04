@@ -6,20 +6,9 @@ from __future__ import print_function
 import datetime
 import logging
 
-from sqlalchemy import (
-    Column,
-    DateTime,
-    ForeignKey,
-    Integer,
-    MetaData,
-    Table
-)
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, MetaData, Table
 
-from galaxy.model.migrate.versions.util import (
-    create_table,
-    drop_table
-)
-
+logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger(__name__)
 now = datetime.datetime.utcnow
 metadata = MetaData()
@@ -32,11 +21,14 @@ def upgrade(migrate_engine):
 
     # 1) Drop
     for table_name in ["workflow_invocation_step", "workflow_invocation"]:
-        t = Table(table_name, metadata, autoload=True)
-        drop_table(t)
-        metadata.remove(t)
+        try:
+            t = Table(table_name, metadata, autoload=True)
+            t.drop()
+            metadata.remove(t)
+        except Exception:
+            log.exception("Failed to drop table '%s', ignoring (might result in wrong schema)" % table_name)
 
-    # 2) Re-add
+    # 2) Readd
     WorkflowInvocation_table = Table("workflow_invocation", metadata,
                                      Column("id", Integer, primary_key=True),
                                      Column("create_time", DateTime, default=now),
@@ -52,8 +44,13 @@ def upgrade(migrate_engine):
                                          Column("job_id", Integer, ForeignKey("job.id"), index=True, nullable=True))
 
     for table in [WorkflowInvocation_table, WorkflowInvocationStep_table]:
-        create_table(table)
+        try:
+            table.create()
+        except Exception:
+            log.exception("Failed to create table '%s', ignoring (might result in wrong schema)" % table.name)
 
 
 def downgrade(migrate_engine):
+    metadata.bind = migrate_engine
+    # No downgrade
     pass

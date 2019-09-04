@@ -4,15 +4,14 @@ API operations on Group objects.
 import logging
 
 from galaxy import web
-from galaxy.util import unicodify
-from galaxy.webapps.base.controller import BaseAPIController, url_for
+from galaxy.web.base.controller import BaseAPIController, url_for
 
 log = logging.getLogger(__name__)
 
 
 class GroupRolesAPIController(BaseAPIController):
 
-    @web.legacy_expose_api
+    @web.expose_api
     @web.require_admin
     def index(self, trans, group_id, **kwd):
         """
@@ -37,11 +36,11 @@ class GroupRolesAPIController(BaseAPIController):
                                  url=url_for('group_role', group_id=group_id, id=encoded_id, )))
         except Exception as e:
             rval = "Error in group API at listing roles"
-            log.error(rval + ": %s", unicodify(e))
+            log.error(rval + ": %s" % str(e))
             trans.response.status = 500
         return rval
 
-    @web.legacy_expose_api
+    @web.expose_api
     @web.require_admin
     def show(self, trans, id, group_id, **kwd):
         """
@@ -64,10 +63,10 @@ class GroupRolesAPIController(BaseAPIController):
                 item = "role %s not in group %s" % (role.name, group.name)
         except Exception as e:
             item = "Error in group_role API group %s role %s" % (group.name, role.name)
-            log.error(item + ": %s", unicodify(e))
+            log.error(item + ": %s" % str(e))
         return item
 
-    @web.legacy_expose_api
+    @web.expose_api
     @web.require_admin
     def update(self, trans, id, group_id, **kwd):
         """
@@ -96,10 +95,10 @@ class GroupRolesAPIController(BaseAPIController):
                             url=url_for('group_role', group_id=group_id, id=role_id))
         except Exception as e:
             item = "Error in group_role API Adding role %s to group %s" % (role.name, group.name)
-            log.error(item + ": %s", unicodify(e))
+            log.error(item + ": %s" % str(e))
         return item
 
-    @web.legacy_expose_api
+    @web.expose_api
     @web.require_admin
     def delete(self, trans, id, group_id, **kwd):
         """
@@ -123,5 +122,5 @@ class GroupRolesAPIController(BaseAPIController):
                 item = "role %s not in group %s" % (role.name, group.name)
         except Exception as e:
             item = "Error in group_role API Removing role %s from group %s" % (role.name, group.name)
-            log.error(item + ": %s", unicodify(e))
+            log.error(item + ": %s" % str(e))
         return item

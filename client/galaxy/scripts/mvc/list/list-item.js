@@ -421,11 +421,13 @@ export var FoldoutListItemView = ListItemView.extend({
         var FoldoutClass = this._getFoldoutPanelClass(model);
         var options = this._getFoldoutPanelOptions(model);
 
-        return new FoldoutClass(
+        var foldout = new FoldoutClass(
             _.extend(options, {
                 model: model
             })
         );
+
+        return foldout;
     },
 
     /** Stub to return proper foldout panel class */

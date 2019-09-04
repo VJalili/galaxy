@@ -1,6 +1,5 @@
-from collections import OrderedDict
-
 from galaxy import model
+from galaxy.util.odict import odict
 from .type_description import COLLECTION_TYPE_DESCRIPTION_FACTORY
 
 
@@ -35,29 +34,7 @@ class CollectionBuilder(object):
 
     def __init__(self, collection_type_description):
         self._collection_type_description = collection_type_description
-        self._current_elements = OrderedDict()
-
-    def replace_elements_in_collection(self, template_collection, replacement_dict):
-        self._current_elements = self._replace_elements_in_collection(
-            template_collection=template_collection,
-            replacement_dict=replacement_dict,
-        )
-
-    def _replace_elements_in_collection(self, template_collection, replacement_dict):
-        elements = OrderedDict()
-        for element in template_collection.elements:
-            if element.is_collection:
-                collection_builder = CollectionBuilder(
-                    collection_type_description=self._collection_type_description.child_collection_type_description()
-                )
-                collection_builder.replace_elements_in_collection(
-                    template_collection=element.child_collection,
-                    replacement_dict=replacement_dict
-                )
-                elements[element.element_identifier] = collection_builder
-            else:
-                elements[element.element_identifier] = replacement_dict.get(element.element_object, element.element_object)
-        return elements
+        self._current_elements = odict()
 
     def get_level(self, identifier):
         if not self._nested_collection:
@@ -78,7 +55,7 @@ class CollectionBuilder(object):
     def build_elements(self):
         elements = self._current_elements
         if self._nested_collection:
-            new_elements = OrderedDict()
+            new_elements = odict()
             for identifier, element in elements.items():
                 new_elements[identifier] = element.build()
             elements = new_elements

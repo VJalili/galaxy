@@ -1,4 +1,4 @@
-from galaxy.webapps.base.controller import BaseUIController, web
+from galaxy.web.base.controller import BaseUIController, web
 
 
 class Error(BaseUIController):

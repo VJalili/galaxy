@@ -40,13 +40,13 @@ var HDCAListItemEdit = _super.extend(
                         <span class="fa fa-times"></span>
                     </a>
                     <div class="dropdown-menu" role="menu">
-                            <a href="javascript:void(0)" role="button" class="dropdown-item delete-collection">
+                            <a href="#" class="dropdown-item delete-collection">
                                 ${_l("Collection Only")}
                             </a>
-                            <a href="javascript:void(0)" role="button" class="dropdown-item delete-collection-and-datasets">
+                            <a href="#" class="dropdown-item delete-collection-and-datasets">
                                 ${_l("Delete Datasets")}
                             </a>
-                            <a href="javascript:void(0)" role="button" style="display: ${
+                            <a href="#" style="display: ${
                                 this.purgeAllowed ? "inherit" : "none"
                             }" class="dropdown-item delete-collection-and-purge-datasets">
                                 ${_l("Permanently Delete Datasets")}

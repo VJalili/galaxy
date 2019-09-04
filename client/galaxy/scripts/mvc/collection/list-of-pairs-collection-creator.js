@@ -1491,7 +1491,8 @@ var PairedCollectionCreator = Backbone.View.extend(baseMVC.LoggableMixin)
             //this.debug( '_pairDragstart', ev, pair )
             // auto select the pair causing the event and move all selected
             pair.$el.addClass("selected");
-            this.$dragging = this.$(".paired-columns .dataset.selected");
+            var $selected = this.$(".paired-columns .dataset.selected");
+            this.$dragging = $selected;
         },
         /** drag communication with pair sub-views: dragend - remove the placeholder */
         _pairDragend: function(ev, pair) {
@@ -1545,11 +1546,11 @@ var PairedCollectionCreator = Backbone.View.extend(baseMVC.LoggableMixin)
             header: _.template(
                 [
                     '<div class="main-help well clear">',
-                    '<a class="more-help" href="javascript:void(0);" role="button">',
+                    '<a class="more-help" href="javascript:void(0);">',
                     _l("More help"),
                     "</a>",
                     '<div class="help-content">',
-                    '<a class="less-help" href="javascript:void(0);" role="button">',
+                    '<a class="less-help" href="javascript:void(0);">',
                     _l("Less"),
                     "</a>",
                     "</div>",
@@ -1568,7 +1569,7 @@ var PairedCollectionCreator = Backbone.View.extend(baseMVC.LoggableMixin)
                     "</span>",
                     '<span class="title-info unpaired-info"></span>',
                     "</div>",
-                    '<div class="unpaired-filter forward-unpaired-filter float-left search-input">',
+                    '<div class="unpaired-filter forward-unpaired-filter float-left">',
                     '<input class="search-query" placeholder="',
                     _l("Filter this list"),
                     '" />',
@@ -1577,13 +1578,13 @@ var PairedCollectionCreator = Backbone.View.extend(baseMVC.LoggableMixin)
                     "</div>",
                     '<div class="paired-column flex-column no-flex column">',
                     '<div class="column-header">',
-                    '<a class="choose-filters-link" href="javascript:void(0)" role="button">',
+                    '<a class="choose-filters-link" href="javascript:void(0)">',
                     _l("Choose filters"),
                     "</a>",
-                    '<a class="clear-filters-link" href="javascript:void(0);" role="button">',
+                    '<a class="clear-filters-link" href="javascript:void(0);">',
                     _l("Clear filters"),
                     "</a><br />",
-                    '<a class="autopair-link" href="javascript:void(0);" role="button">',
+                    '<a class="autopair-link" href="javascript:void(0);">',
                     _l("Auto-pair"),
                     "</a>",
                     "</div>",
@@ -1596,7 +1597,7 @@ var PairedCollectionCreator = Backbone.View.extend(baseMVC.LoggableMixin)
                     "</span>",
                     '<span class="title-info unpaired-info"></span>',
                     "</div>",
-                    '<div class="unpaired-filter reverse-unpaired-filter float-left search-input">',
+                    '<div class="unpaired-filter reverse-unpaired-filter float-left">',
                     '<input class="search-query" placeholder="',
                     _l("Filter this list"),
                     '" />',
@@ -1630,7 +1631,7 @@ var PairedCollectionCreator = Backbone.View.extend(baseMVC.LoggableMixin)
                     '<div class="column-title paired-column-title">',
                     '<span class="title"></span>',
                     "</div>",
-                    '<a class="unpair-all-link" href="javascript:void(0);" role="button">',
+                    '<a class="unpair-all-link" href="javascript:void(0);">',
                     _l("Unpair all"),
                     "</a>",
                     "</div>",
@@ -1678,14 +1679,14 @@ var PairedCollectionCreator = Backbone.View.extend(baseMVC.LoggableMixin)
                     _l("Create a different kind of collection"),
                     ' <span class="caret"></span>',
                     "</button>",
-                    '<div class="dropdown-menu" role="menu">',
-                    '<a class="dropdown-item" href="javascript:void(0)" role="button">',
+                    '<ul class="dropdown-menu" role="menu">',
+                    '<li><a href="#">',
                     _l("Create a <i>single</i> pair"),
-                    "</a>",
-                    '<a class="dropdown-item" href="javascript:void(0)" role="button">',
+                    "</a></li>",
+                    '<li><a href="#">',
                     _l("Create a list of <i>unpaired</i> datasets"),
-                    "</a>",
-                    "</div>",
+                    "</a></li>",
+                    "</ul>",
                     "</div>",
                     "</div>",
 

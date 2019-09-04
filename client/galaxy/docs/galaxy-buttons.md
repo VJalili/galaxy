@@ -5,21 +5,21 @@
 ```
 
 ```vue
-<a href="javascript:void(0)" class="action-button">An anchor with .action-button</a>
+<a href="#" class="action-button">An anchor with .action-button</a>
 ```
 
 All the crazy permutations of menu button...
 
 ```vue
-<a href="javascript:void(0)" class="menubutton">An anchor with .menu-button</a>
+<a href="#" class="menubutton">An anchor with .menu-button</a>
 ```
 
 ```vue
-<a href="javascript:void(0)" class="menubutton popup">An anchor with .menu-button.popup</a>
+<a href="#" class="menubutton popup">An anchor with .menu-button.popup</a>
 ```
 
 ```vue
-<a href="javascript:void(0)" class="menubutton popup split">
+<a href="#" class="menubutton popup split">
   <a class="menubutton-label">An anchor with .menu-button.popup.split</a>
 </a>
 ```

@@ -175,7 +175,8 @@ function buildSingleSelectCell(control, columnIndex) {
                 var eventData = {};
 
                 var key = $cell.parent().attr("id");
-                eventData[key] = $cell.data(COLUMN_INDEX_DATA_KEY);
+                var val = $cell.data(COLUMN_INDEX_DATA_KEY);
+                eventData[key] = val;
                 $cell.parents(".peek").trigger(CHANGE_EVENT, eventData);
             }
         });
@@ -208,7 +209,8 @@ function buildMultiSelectCell(control, columnIndex) {
             var eventData = {};
 
             var key = $cell.parent().attr("id");
-            eventData[key] = $.makeArray(selectedColumnIndeces);
+            var val = $.makeArray(selectedColumnIndeces);
+            eventData[key] = val;
             $cell.parents(".peek").trigger(CHANGE_EVENT, eventData);
         });
     }

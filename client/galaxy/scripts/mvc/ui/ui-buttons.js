@@ -262,7 +262,7 @@ var ButtonMenu = Backbone.View.extend({
                 .html(options.title);
         this.$menu && this.$menu.remove();
         if (this.collection.length > 0) {
-            this.$menu = $("<div/>")
+            this.$menu = $("<ul/>")
                 .addClass("menu dropdown-menu dropdown-menu-right")
                 .addClass(`pull-${this.model.get("pull")}`)
                 .attr("role", "menu");
@@ -290,8 +290,8 @@ var ButtonMenu = Backbone.View.extend({
                             suboptions.onclick();
                         }
                     });
-                this.$menu.append($link);
-                suboptions.divider && this.$menu.append($("<div/>").addClass("divider"));
+                this.$menu.append($("<li/>").append($link));
+                suboptions.divider && this.$menu.append($("<li/>").addClass("divider"));
             }
         });
     },

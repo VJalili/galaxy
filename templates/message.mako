@@ -1,5 +1,5 @@
 <%!
-    from galaxy.util.sanitize_html import sanitize_html
+    import bleach
 
     def inherit(context):
         if context.get('use_panels'):
@@ -63,5 +63,5 @@
         if status not in ("danger", "info", "success", "warning"):
             status = "info"
     %>
-    <div class="message mt-2 alert alert-${status}">${_(sanitize_html(msg))}</div>
+    <div class="message mt-2 alert alert-${status}">${_(bleach.clean(msg))}</div>
 </%def>

@@ -7,7 +7,7 @@ import Masthead from "components/Masthead";
 
 export function initMasthead(config, container) {
     console.log("initMasthead");
-    const Component = Vue.extend(Masthead);
+    let Component = Vue.extend(Masthead);
     return new Component({
         props: Object.keys(config),
         propsData: config,

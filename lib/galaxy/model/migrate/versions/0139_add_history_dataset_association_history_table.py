@@ -6,26 +6,13 @@ from __future__ import print_function
 import datetime
 import logging
 
-from sqlalchemy import (
-    Column,
-    DateTime,
-    ForeignKey,
-    Integer,
-    MetaData,
-    Table
-)
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, MetaData, Table
 
-from galaxy.model.custom_types import (
-    MetadataType,
-    TrimmedString
-)
-from galaxy.model.migrate.versions.util import (
-    create_table,
-    drop_table
-)
+from galaxy.model.custom_types import MetadataType, TrimmedString
 
-log = logging.getLogger(__name__)
 now = datetime.datetime.utcnow
+log = logging.getLogger(__name__)
+log.setLevel(logging.DEBUG)
 metadata = MetaData()
 
 HistoryDatasetAssociationHistory_table = Table(
@@ -45,12 +32,18 @@ def upgrade(migrate_engine):
     print(__doc__)
     metadata.bind = migrate_engine
     metadata.reflect()
-
-    create_table(HistoryDatasetAssociationHistory_table)
+    try:
+        HistoryDatasetAssociationHistory_table.create()
+        log.debug("Created history_dataset_association_history table")
+    except Exception:
+        log.exception("Creating history_dataset_association_history table failed.")
 
 
 def downgrade(migrate_engine):
     metadata.bind = migrate_engine
     metadata.reflect()
-
-    drop_table(HistoryDatasetAssociationHistory_table)
+    try:
+        HistoryDatasetAssociationHistory_table.drop()
+        log.debug("Dropped history_dataset_association_history table")
+    except Exception:
+        log.exception("Dropping history_dataset_association_history table failed.")

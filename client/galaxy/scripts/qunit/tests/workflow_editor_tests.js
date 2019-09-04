@@ -54,7 +54,8 @@ QUnit.module("Input terminal model test", {
     test_connector: function() {
         var outputTerminal = new Terminals.OutputTerminal({ datatypes: ["input"] });
         var inputTerminal = this.input_terminal;
-        return new Connector(outputTerminal, inputTerminal);
+        var connector = new Connector(outputTerminal, inputTerminal);
+        return connector;
     },
     with_test_connector: function(f) {
         this.test_connector();
@@ -71,7 +72,16 @@ QUnit.module("Input terminal model test", {
                 return Terminals.NULL_COLLECTION_TYPE_DESCRIPTION;
             };
         }
-        return this.input_terminal.canAccept(other).canAccept;
+        return this.input_terminal.canAccept(other);
+    },
+    pja_change_datatype_node: function(output_name, newtype) {
+        var pja = {
+            action_type: "ChangeDatatypeAction",
+            output_name: output_name,
+            action_arguments: { newtype: newtype }
+        };
+        var otherNode = { post_job_actions: [pja] };
+        return otherNode;
     }
 });
 
@@ -120,7 +130,7 @@ QUnit.test("test destroy", function(assert) {
 });
 
 QUnit.test("can accept exact datatype", function(assert) {
-    var other = { node: {}, datatypes: ["txt"], force_datatype: null }; // input also txt
+    var other = { node: {}, datatypes: ["txt"] }; // input also txt
     assert.ok(this.test_accept(other));
 });
 
@@ -135,12 +145,22 @@ QUnit.test("cannot accept incorrect datatype", function(assert) {
 });
 
 QUnit.test("can accept incorrect datatype if converted with PJA", function(assert) {
-    var other = { node: {}, datatypes: ["binary"], force_datatype: "txt", name: "out1" }; // Was binary but converted to txt
+    var otherNode = this.pja_change_datatype_node("out1", "txt");
+    var other = { node: otherNode, datatypes: ["binary"], name: "out1" }; // Was binary but converted to txt
     assert.ok(this.test_accept(other));
 });
 
 QUnit.test("cannot accept incorrect datatype if converted with PJA to incompatible type", function(assert) {
-    var other = { node: {}, datatypes: ["binary"], force_datatype: "bam", name: "out1" };
+    var otherNode = this.pja_change_datatype_node("out1", "bam"); // bam's are not txt
+    var other = { node: otherNode, datatypes: ["binary"], name: "out1" };
+    assert.ok(!this.test_accept(other));
+});
+
+QUnit.test("cannot accept incorrect datatype if some other output converted with PJA to compatible type", function(
+    assert
+) {
+    var otherNode = this.pja_change_datatype_node("out2", "txt");
+    var other = { node: otherNode, datatypes: ["binary"], name: "out1" };
     assert.ok(!this.test_accept(other));
 });
 
@@ -299,7 +319,7 @@ QUnit.test("Collection output can connect to same collection input type", functi
     });
     outputTerminal.node = {};
     assert.ok(
-        inputTerminal.canAccept(outputTerminal).canAccept,
+        inputTerminal.canAccept(outputTerminal),
         "Input terminal " + inputTerminal + " can not accept " + outputTerminal
     );
 });
@@ -312,7 +332,7 @@ QUnit.test("Collection output cannot connect to different collection input type"
         collection_type: "paired"
     });
     outputTerminal.node = {};
-    assert.ok(!inputTerminal.canAccept(outputTerminal).canAccept);
+    assert.ok(!inputTerminal.canAccept(outputTerminal));
 });
 
 QUnit.module("Node unit test", {
@@ -556,7 +576,9 @@ QUnit.module("Node view ", {
             disableMapOver: function() {},
             mapOver: Terminals.NULL_COLLECTION_TYPE_DESCRIPTION
         };
-        return new Connector(outputTerminal, terminal);
+        var c = new Connector(outputTerminal, terminal);
+
+        return c;
     },
     connectAttachedMultiInputTerminal: function(inputType, outputType) {
         this.view.addDataInput({ name: "TestName", extensions: [inputType], multiple: true });
@@ -577,7 +599,9 @@ QUnit.module("Node view ", {
             disableMapOver: function() {},
             mapOver: new Terminals.CollectionTypeDescription("list")
         };
-        return new Connector(outputTerminal, terminal);
+        var c = new Connector(outputTerminal, terminal);
+
+        return c;
     },
     connectAttachedMappedOutput: function() {
         this.view.addDataInput({ name: "TestName", extensions: ["txt"], input_type: "dataset_collection" });
@@ -598,7 +622,9 @@ QUnit.module("Node view ", {
             disableMapOver: function() {},
             mapOver: new Terminals.CollectionTypeDescription("list")
         };
-        return new Connector(outputTerminal, terminal);
+        var c = new Connector(outputTerminal, terminal);
+
+        return c;
     }
 });
 
@@ -910,7 +936,8 @@ QUnit.module("terminal mapping logic", {
     },
     newNode: function() {
         var nodeEl = $("<div>")[0];
-        return new Node(create_app(), { element: nodeEl });
+        var node = new Node(create_app(), { element: nodeEl });
+        return node;
     },
     _addExistingOutput: function(terminal, output, connected) {
         var self = this;
@@ -962,7 +989,7 @@ QUnit.module("terminal mapping logic", {
             outputTerminal = output;
         }
 
-        assert.ok(!inputTerminal.attachable(outputTerminal).canAccept);
+        assert.ok(!inputTerminal.attachable(outputTerminal));
     },
     verifyAttachable: function(assert, inputTerminal, output) {
         var outputTerminal;
@@ -973,15 +1000,12 @@ QUnit.module("terminal mapping logic", {
             outputTerminal = output;
         }
 
-        assert.ok(
-            inputTerminal.attachable(outputTerminal).canAccept,
-            "Cannot attach " + outputTerminal + " to " + inputTerminal
-        );
+        assert.ok(inputTerminal.attachable(outputTerminal), "Cannot attach " + outputTerminal + " to " + inputTerminal);
 
         // Go further... make sure datatypes are being enforced
         inputTerminal.datatypes = ["bam"];
         outputTerminal.datatypes = ["txt"];
-        assert.ok(!inputTerminal.attachable(outputTerminal).canAccept);
+        assert.ok(!inputTerminal.attachable(outputTerminal));
     },
     verifyMappedOver: function(assert, terminal) {
         assert.ok(terminal.terminalMapping.mapOver.isCollection);

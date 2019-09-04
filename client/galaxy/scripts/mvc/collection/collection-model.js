@@ -134,7 +134,8 @@ var DatasetDCE = DATASET_MODEL.DatasetAssociation.extend(
                     return `${getAppRoot()}api/datasets`;
                 }
                 const datasetId = this._getDatasetId();
-                return `${getAppRoot()}api/histories/${this.get("history_id")}/contents/${datasetId}`;
+                const url = `${getAppRoot()}api/histories/${this.get("history_id")}/contents/${datasetId}`;
+                return url;
             },
 
             _getDatasetId: function() {

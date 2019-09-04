@@ -10,6 +10,7 @@ from base.populators import (
 TEST_KEYS_FOR_ALL_USERS = [
     'enable_unique_workflow_defaults',
     'ftp_upload_site',
+    'ftp_upload_dir',
     'wiki_url',
     'support_url',
     'logo_url',

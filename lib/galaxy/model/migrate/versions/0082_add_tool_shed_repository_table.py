@@ -5,25 +5,22 @@ from __future__ import print_function
 
 import datetime
 import logging
+import sys
 
-from sqlalchemy import (
-    Boolean,
-    Column,
-    DateTime,
-    Integer,
-    MetaData,
-    Table,
-    TEXT
-)
+from sqlalchemy import Boolean, Column, DateTime, Integer, MetaData, Table, TEXT
 
+# Need our custom types, but don't import anything else from model
 from galaxy.model.custom_types import TrimmedString
-from galaxy.model.migrate.versions.util import (
-    create_table,
-    drop_table
-)
 
-log = logging.getLogger(__name__)
 now = datetime.datetime.utcnow
+log = logging.getLogger(__name__)
+log.setLevel(logging.DEBUG)
+handler = logging.StreamHandler(sys.stdout)
+format = "%(name)s %(levelname)s %(asctime)s %(message)s"
+formatter = logging.Formatter(format)
+handler.setFormatter(formatter)
+log.addHandler(handler)
+
 metadata = MetaData()
 
 # New table to store information about cloned tool shed repositories.
@@ -43,12 +40,16 @@ def upgrade(migrate_engine):
     print(__doc__)
     metadata.bind = migrate_engine
     metadata.reflect()
-
-    create_table(ToolShedRepository_table)
+    try:
+        ToolShedRepository_table.create()
+    except Exception:
+        log.exception("Creating tool_shed_repository table failed.")
 
 
 def downgrade(migrate_engine):
     metadata.bind = migrate_engine
     metadata.reflect()
-
-    drop_table(ToolShedRepository_table)
+    try:
+        ToolShedRepository_table.drop()
+    except Exception:
+        log.exception("Dropping tool_shed_repository table failed.")

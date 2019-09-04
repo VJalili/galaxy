@@ -5,12 +5,9 @@ import logging
 
 from galaxy import exceptions
 from galaxy.datatypes.data import Data
-from galaxy.util import (
-    asbool,
-    unicodify
-)
-from galaxy.web import expose_api_anonymous_and_sessionless
-from galaxy.webapps.base.controller import BaseAPIController
+from galaxy.util import asbool
+from galaxy.web import _future_expose_api_anonymous_and_sessionless as expose_api_anonymous_and_sessionless
+from galaxy.web.base.controller import BaseAPIController
 
 log = logging.getLogger(__name__)
 
@@ -39,10 +36,10 @@ class DatatypesController(BaseAPIController):
                         continue
                     rval.append(datatype_info_dict)
                 return rval
-        except Exception as e:
-            log.exception('Could not get datatypes')
-            if not isinstance(e, exceptions.MessageException):
-                raise exceptions.InternalServerError(unicodify(e))
+        except Exception as exception:
+            log.error('could not get datatypes: %s', str(exception), exc_info=True)
+            if not isinstance(exception, exceptions.MessageException):
+                raise exceptions.InternalServerError(str(exception))
             else:
                 raise
 
@@ -73,10 +70,10 @@ class DatatypesController(BaseAPIController):
                 class_to_classes[n] = dict((t, True) for t in types)
             return dict(ext_to_class_name=ext_to_class_name, class_to_classes=class_to_classes)
 
-        except Exception as e:
-            log.exception('Could not get datatype mapping')
-            if not isinstance(e, exceptions.MessageException):
-                raise exceptions.InternalServerError(unicodify(e))
+        except Exception as exception:
+            log.error('could not get datatype mapping: %s', str(exception), exc_info=True)
+            if not isinstance(exception, exceptions.MessageException):
+                raise exceptions.InternalServerError(str(exception))
             else:
                 raise
 
@@ -93,10 +90,10 @@ class DatatypesController(BaseAPIController):
                 if datatype is not None:
                     rval.append(datatype)
             return rval
-        except Exception as e:
-            log.exception('Could not get datatypes')
-            if not isinstance(e, exceptions.MessageException):
-                raise exceptions.InternalServerError(unicodify(e))
+        except Exception as exception:
+            log.error('could not get datatypes: %s', str(exception), exc_info=True)
+            if not isinstance(exception, exceptions.MessageException):
+                raise exceptions.InternalServerError(str(exception))
             else:
                 raise
 

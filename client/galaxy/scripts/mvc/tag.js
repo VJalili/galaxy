@@ -117,9 +117,7 @@ var TagsEditor = Backbone.View.extend(baseMVC.LoggableMixin)
             });
             if (renderedArray.length === 0) {
                 // If there are no tags to render we just show the add-tag-button
-                renderedArray.push(
-                    `<img alt="add tag button" src=${addButton} class="add-tag-button" title="Add tags"/>`
-                );
+                renderedArray.push(`<img src=${addButton} class="add-tag-button" title="Add tags"/>`);
             }
             return renderedArray.join(" ");
         },
@@ -144,7 +142,7 @@ var TagsEditor = Backbone.View.extend(baseMVC.LoggableMixin)
 
         /** @returns {String[]} all tags used by the current user */
         _getTagsUsed: function() {
-            const Galaxy = getGalaxyInstance();
+            let Galaxy = getGalaxyInstance();
             var self = this;
             return _.map(Galaxy.user.get("tags_used"), self._nameToHash);
         },
@@ -170,7 +168,7 @@ var TagsEditor = Backbone.View.extend(baseMVC.LoggableMixin)
          *  @param {String} newTag  the tag to add to the list of used
          */
         _addNewTagToTagsUsed: function(newTag) {
-            const Galaxy = getGalaxyInstance();
+            let Galaxy = getGalaxyInstance();
             var tagsUsed = Galaxy.user.get("tags_used");
             if (!_.contains(tagsUsed, newTag)) {
                 tagsUsed.push(newTag);

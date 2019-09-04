@@ -18,7 +18,7 @@ const multiColumnsToString = function(targetColumns, colHeaders) {
 
 const removeColumns = function(columns, targetColumns) {
     const newColumns = [];
-    for (const index in columns) {
+    for (let index in columns) {
         if (targetColumns.indexOf(index) === -1) {
             newColumns.push(columns[index]);
         }
@@ -42,7 +42,7 @@ const applyRegex = function(regex, target, data, replacement, groupCount) {
             return null;
         }
         if (!replacement) {
-            groupCount = groupCount && parseInt(groupCount, 10);
+            groupCount = groupCount && parseInt(groupCount);
             if (groupCount) {
                 if (match.length != groupCount + 1) {
                     failedCount++;
@@ -108,7 +108,7 @@ const RULES = {
             }
         },
         save: (component, rule) => {
-            rule.start = parseInt(component.addColumnRownumStart, 10);
+            rule.start = parseInt(component.addColumnRownumStart);
         },
         apply: (rule, data, sources, columns) => {
             let rownum = rule.start;
@@ -169,7 +169,7 @@ const RULES = {
             const ruleValue = rule.value;
             let newRow;
             if (ruleValue.indexOf("identifier") == 0) {
-                const identifierIndex = parseInt(ruleValue.substring("identifier".length), 10);
+                const identifierIndex = parseInt(ruleValue.substring("identifier".length));
                 newRow = (row, index) => {
                     const newRow = row.slice();
                     newRow.push(sources[index]["identifiers"][identifierIndex]);
@@ -223,7 +223,7 @@ const RULES = {
                 const tags = sources[index]["tags"];
                 tags.sort();
                 let groupTagValue = rule.default_value;
-                for (const index in tags) {
+                for (let index in tags) {
                     const tag = tags[index];
                     if (tag.indexOf(groupTagPrefix) == 0) {
                         groupTagValue = tag.substr(groupTagPrefix.length);
@@ -253,7 +253,7 @@ const RULES = {
                 component.addColumnRegexTarget = rule.target_column;
                 component.addColumnRegexExpression = rule.expression;
                 component.addColumnRegexReplacement = rule.replacement;
-                component.addColumnRegexGroupCount = parseInt(rule.group_count);
+                component.addColumnRegexGroupCount = rule.group_count;
             }
             let addColumnRegexType = "global";
             if (component.addColumnRegexGroupCount) {
@@ -347,7 +347,7 @@ const RULES = {
         },
         save: (component, rule) => {
             rule.target_column = component.addColumnSubstrTarget;
-            rule.length = parseInt(component.addColumnSubstrLength, 10);
+            rule.length = parseInt(component.addColumnSubstrLength);
             rule.substr_type = component.addColumnSubstrType;
         },
         apply: (rule, data, sources, columns) => {
@@ -402,8 +402,8 @@ const RULES = {
             const targets = rule.target_columns;
             function newRow(row) {
                 const newRow = [];
-                for (const index in row) {
-                    if (targets.indexOf(parseInt(index, 10)) == -1) {
+                for (let index in row) {
+                    if (targets.indexOf(parseInt(index)) == -1) {
                         newRow.push(row[index]);
                     }
                 }
@@ -448,7 +448,7 @@ const RULES = {
             const target = rule.target_column;
             const invert = rule.invert;
             const filterFunction = function(el, index) {
-                const row = data[parseInt(index, 10)];
+                const row = data[parseInt(index)];
                 return regExp.exec(row[target]) ? !invert : invert;
             };
             sources = sources.filter(filterFunction);
@@ -477,13 +477,13 @@ const RULES = {
                 component.addFilterCountWhich = "first";
                 component.addFilterCountInvert = false;
             } else {
-                component.addFilterCountN = parseInt(rule.count, 10);
+                component.addFilterCountN = parseInt(rule.count);
                 component.addFilterCountWhich = rule.which;
                 component.addFilterCountInvert = rule.inverse;
             }
         },
         save: (component, rule) => {
-            rule.count = parseInt(component.addFilterCountN, 10);
+            rule.count = parseInt(component.addFilterCountN);
             rule.which = component.addFilterCountWhich;
             rule.invert = component.addFilterCountInvert;
         },
@@ -528,7 +528,7 @@ const RULES = {
             const target = rule.target_column;
             const invert = rule.invert;
             const filterFunction = function(el, index) {
-                const row = data[parseInt(index, 10)];
+                const row = data[parseInt(index)];
                 return row[target].length ? !invert : invert;
             };
             sources = sources.filter(filterFunction);
@@ -562,7 +562,7 @@ const RULES = {
             const invert = rule.invert;
             const value = rule.value;
             const filterFunction = function(el, index) {
-                const row = data[parseInt(index, 10)];
+                const row = data[parseInt(index)];
                 return row[target] == value ? !invert : invert;
             };
             sources = sources.filter(filterFunction);
@@ -598,7 +598,7 @@ const RULES = {
             const compare_type = rule.compare_type;
             const value = rule.value;
             const filterFunction = function(el, index) {
-                const row = data[parseInt(index, 10)];
+                const row = data[parseInt(index)];
                 const targetValue = parseFloat(row[target]);
                 let matches;
                 if (compare_type == "less_than") {
@@ -730,7 +730,7 @@ const RULES = {
                 const newRow0 = [],
                     newRow1 = [];
                 for (let index in row) {
-                    index = parseInt(index, 10);
+                    index = parseInt(index);
                     if (targets0.indexOf(index) > -1) {
                         newRow0.push(row[index]);
                     } else if (targets1.indexOf(index) > -1) {
@@ -862,10 +862,11 @@ const colHeadersFor = function(data, columns) {
 };
 
 const applyRules = function(data, sources, columns, rules, headersPerRule = []) {
-    const colHeadersPerRule = Array.from(headersPerRule);
+    let colHeadersPerRule = Array.from(headersPerRule);
     let hasRuleError = false;
     for (var ruleIndex in rules) {
-        colHeadersPerRule[ruleIndex] = colHeadersFor(data, columns);
+        const ruleHeaders = colHeadersFor(data, columns);
+        colHeadersPerRule[ruleIndex] = ruleHeaders;
         const rule = rules[ruleIndex];
         rule.error = null;
         rule.warn = null;
