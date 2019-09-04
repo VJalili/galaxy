@@ -58,15 +58,15 @@ export default {
     },
     computed: {
         applicationsIndex: function() {
-            const result = {};
-            for (const app of this.applications) {
+            let result = {};
+            for (let app of this.applications) {
                 result[app.id] = app;
             }
             return result;
         },
         applicationsAll: function() {
-            const result = [];
-            for (const app of this.applications) {
+            let result = [];
+            for (let app of this.applications) {
                 result.push(app.id);
             }
             return result;
@@ -99,8 +99,8 @@ export default {
             this._reload([id]);
         },
         reloadAll: function() {
-            const ids = [];
-            for (const app of this.applications) {
+            let ids = [];
+            for (let app of this.applications) {
                 ids.push(app.id);
             }
             this._reload(ids);
@@ -119,15 +119,15 @@ export default {
                 });
         },
         _highlightRows: function(appList, status) {
-            for (const appIndex of appList) {
-                const app = this.applicationsIndex[appIndex];
+            for (let appIndex of appList) {
+                let app = this.applicationsIndex[appIndex];
                 if (app) {
                     app._rowVariant = status;
                 }
             }
         },
         _errorMessage: function(e) {
-            const message = e && e.response && e.response.data && e.response.data.err_msg;
+            let message = e && e.response && e.response.data && e.response.data.err_msg;
             this.messageText = message || "Request failed for an unknown reason.";
             this.messageVariant = "danger";
         }

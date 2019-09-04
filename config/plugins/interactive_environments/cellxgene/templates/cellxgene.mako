@@ -2,11 +2,12 @@
 <%
     ie_request.load_deploy_config()
 
+    # Make the dataset available inside the container
+    data_file = ie_request.volume('/input/file.' + hda.ext, hda.file_name, mode='ro')
+
     ie_request.launch(
-        image = trans.request.params.get('image_tag', None),
-        env_override={
-            'dataset_hid': hda.hid
-        }
+       image = trans.request.params.get('image_tag', None),
+       volumes = [data_file]
     )
 
     url = ie_request.url_template('${PROXY_URL}')
@@ -20,11 +21,14 @@
 
     ${ ie.default_javascript_variables() }
     var url = '${ url }';
+    ${ ie.plugin_require_config() }
 
-    $( document ).ready(function() {
-        IES.keepAlive(url);
-        IES.test_ie_availability(url, function() {
-            IES.append_notebook(url);
+    requirejs(['galaxy.interactive_environments'], function (IES) {
+        $( document ).ready(function() {
+            IES.keepAlive(url);
+            IES.test_ie_availability(url, function() {
+                IES.append_notebook(url);
+            });
         });
     });
 

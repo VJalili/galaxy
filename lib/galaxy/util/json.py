@@ -10,8 +10,6 @@ import string
 
 from six import iteritems, string_types
 
-from ..util import unicodify
-
 __all__ = ("safe_dumps", "validate_jsonrpc_request", "validate_jsonrpc_response", "jsonrpc_request", "jsonrpc_response")
 
 log = logging.getLogger(__name__)
@@ -97,7 +95,7 @@ def validate_jsonrpc_request(request, regular_methods, notification_methods):
         return False, request, jsonrpc_response(id=None,
                                                 error=dict(code=-32700,
                                                            message='Parse error',
-                                                           data=unicodify(e)))
+                                                           data=str(e)))
     try:
         assert 'jsonrpc' in request, \
             'This server requires JSON-RPC 2.0 and no "jsonrpc" member was sent with the Request object as per the JSON-RPC 2.0 Specification.'
@@ -108,7 +106,7 @@ def validate_jsonrpc_request(request, regular_methods, notification_methods):
         return False, request, jsonrpc_response(request=request,
                                                 error=dict(code=-32600,
                                                            message='Invalid Request',
-                                                           data=unicodify(e)))
+                                                           data=str(e)))
     try:
         assert request['method'] in (regular_methods + notification_methods)
     except AssertionError:
@@ -123,7 +121,7 @@ def validate_jsonrpc_request(request, regular_methods, notification_methods):
         return False, request, jsonrpc_response(request=request,
                                                 error=dict(code=-32600,
                                                            message='Invalid Request',
-                                                           data=unicodify(e)))
+                                                           data=str(e)))
     return True, request, None
 
 
@@ -131,8 +129,8 @@ def validate_jsonrpc_response(response, id=None):
     try:
         response = json.loads(response)
     except Exception as e:
-        log.error('Response was not valid JSON: %s', unicodify(e))
-        log.debug('Response was: %s', response)
+        log.error('Response was not valid JSON: %s' % str(e))
+        log.debug('Response was: %s' % response)
         return False, response
     try:
         assert 'jsonrpc' in response, \

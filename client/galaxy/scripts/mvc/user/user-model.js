@@ -55,13 +55,13 @@ var User = Backbone.Model.extend(baseMVC.LoggableMixin).extend(
         },
 
         updatePreferences: function(name, new_value) {
-            const preferences = this.get("preferences");
+            let preferences = this.get("preferences");
             preferences[name] = JSON.stringify(new_value);
             this.preferences = preferences;
         },
 
         getFavorites: function() {
-            const preferences = this.get("preferences");
+            let preferences = this.get("preferences");
             if (preferences && preferences.favorites) {
                 return JSON.parse(preferences.favorites);
             } else {
@@ -72,7 +72,7 @@ var User = Backbone.Model.extend(baseMVC.LoggableMixin).extend(
         },
 
         updateFavorites: function(object_type, new_favorites) {
-            const favorites = this.getFavorites();
+            let favorites = this.getFavorites();
             favorites[object_type] = new_favorites[object_type];
             this.updatePreferences("favorites", favorites);
         },

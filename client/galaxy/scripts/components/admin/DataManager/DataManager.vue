@@ -6,10 +6,18 @@
         <div v-else-if="dataManagers && !dataManagers.length">
             <Alert variant="primary">
                 <h4 class="alert-heading">None installed</h4>
-                You do not currently have any Data Managers installed.
+                You do not currently have any Data Managers installed
+            </Alert>
+            <Alert variant="info">
+                Data Managers can be installed from a
+                <ToolShedButton />
             </Alert>
         </div>
         <div v-else-if="dataManagers && dataTables">
+            <Alert variant="secondary" dismissible>
+                Choose your data managing option from below. You may install additional Data Managers from a
+                <ToolShedButton />
+            </Alert>
             <b-container fluid>
                 <b-row>
                     <b-col md="6">
@@ -29,7 +37,7 @@
                 </b-row>
             </b-container>
             <b-card-group columns>
-                <b-card no-body header="Installed Data Managers" id="data-managers-card">
+                <b-card no-body header="<h4>Data Managers</h4>" id="data-managers-card">
                     <b-list-group flush>
                         <b-list-group-item v-for="(dataManager, index) in dataManagersFiltered" :key="index">
                             <b-button-group vertical>
@@ -57,7 +65,7 @@
                         </b-list-group-item>
                     </b-list-group>
                 </b-card>
-                <b-card no-body header="Tool Data Tables">
+                <b-card no-body header="<h4>Tool Data Tables</h4>">
                     <b-list-group flush>
                         <b-list-group-item
                             v-for="(dataTable, index) in dataTablesFiltered"
@@ -83,9 +91,19 @@ import { getAppRoot } from "onload/loadConfig";
 import axios from "axios";
 import Alert from "components/Alert.vue";
 
+var ToolShedButton = {
+    template: `
+  <b-link href="/admin_toolshed/browse_tool_sheds"
+          target="galaxy_main"
+          class="alert-link">
+  ToolShed
+  </b-link>`
+};
+
 export default {
     components: {
-        Alert
+        Alert,
+        ToolShedButton
     },
     data() {
         return {

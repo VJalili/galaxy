@@ -1,10 +1,10 @@
 import logging
 import os
 import tempfile
-from collections import OrderedDict
 
 from galaxy.tools.actions import ToolAction
 from galaxy.tools.imp_exp import JobExportHistoryArchiveWrapper
+from galaxy.util.odict import odict
 
 log = logging.getLogger(__name__)
 
@@ -18,7 +18,6 @@ class ImportHistoryToolAction(ToolAction):
         #
         trans.check_user_activation()
         job = trans.app.model.Job()
-        job.galaxy_version = trans.app.config.version_major
         session = trans.get_galaxy_session()
         job.session_id = session and session.id
         if history:
@@ -62,7 +61,7 @@ class ImportHistoryToolAction(ToolAction):
         trans.app.job_manager.enqueue(job, tool=tool)
         trans.log_event("Added import history job to the job queue, id: %s" % str(job.id), tool_id=job.tool_id)
 
-        return job, OrderedDict()
+        return job, odict()
 
 
 class ExportHistoryToolAction(ToolAction):
@@ -88,7 +87,6 @@ class ExportHistoryToolAction(ToolAction):
         # Create the job and output dataset objects
         #
         job = trans.app.model.Job()
-        job.galaxy_version = trans.app.config.version_major
         session = trans.get_galaxy_session()
         job.session_id = session and session.id
         if history:
@@ -141,4 +139,4 @@ class ExportHistoryToolAction(ToolAction):
         trans.app.job_manager.enqueue(job, tool=tool)
         trans.log_event("Added export history job to the job queue, id: %s" % str(job.id), tool_id=job.tool_id)
 
-        return job, OrderedDict()
+        return job, odict()

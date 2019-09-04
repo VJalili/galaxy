@@ -322,7 +322,10 @@ _.extend(NumberFilter.prototype, {
      * Returns true if filter can be applied to element.
      */
     applies_to: function(element) {
-        return element.length > this.index;
+        if (element.length > this.index) {
+            return true;
+        }
+        return false;
     },
     /**
      * Helper function: returns true if value in in filter's [low, high] range.
@@ -656,7 +659,7 @@ _.extend(FiltersManager.prototype, {
             // https://github.com/galaxyproject/galaxy/issues/7224
             // eslint-disable-next-line no-undef
             $.getJSON(run_tool_url, url_params, response => {
-                const Galaxy = getGalaxyInstance();
+                let Galaxy = getGalaxyInstance();
                 if (response.error) {
                     // General error.
                     Galaxy.modal.show({

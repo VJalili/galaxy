@@ -5,31 +5,23 @@ from __future__ import print_function
 
 import datetime
 import logging
+import sys
 from json import loads
 
-from sqlalchemy import (
-    Column,
-    DateTime,
-    ForeignKey,
-    Index,
-    Integer,
-    MetaData,
-    String,
-    Table,
-    TEXT
-)
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, MetaData, String, Table, TEXT
 
-from galaxy.model.custom_types import (
-    _sniffnfix_pg9_hex,
-    TrimmedString
-)
-from galaxy.model.migrate.versions.util import (
-    localtimestamp,
-    nextval
-)
+from galaxy.model.custom_types import _sniffnfix_pg9_hex, TrimmedString
+from galaxy.model.migrate.versions.util import localtimestamp, nextval
 
-log = logging.getLogger(__name__)
 now = datetime.datetime.utcnow
+log = logging.getLogger(__name__)
+log.setLevel(logging.DEBUG)
+handler = logging.StreamHandler(sys.stdout)
+format = "%(name)s %(levelname)s %(asctime)s %(message)s"
+formatter = logging.Formatter(format)
+handler.setFormatter(formatter)
+log.addHandler(handler)
+
 metadata = MetaData()
 
 
@@ -88,8 +80,7 @@ def upgrade(migrate_engine):
 def downgrade(migrate_engine):
     metadata.bind = migrate_engine
 
-    ToolIdGuidMap_table = Table(
-        "tool_id_guid_map", metadata,
+    ToolIdGuidMap_table = Table("tool_id_guid_map", metadata,
         Column("id", Integer, primary_key=True),
         Column("create_time", DateTime, default=now),
         Column("update_time", DateTime, default=now, onupdate=now),
@@ -98,9 +89,7 @@ def downgrade(migrate_engine):
         Column("tool_shed", TrimmedString(255)),
         Column("repository_owner", TrimmedString(255)),
         Column("repository_name", TrimmedString(255)),
-        Column("guid", TEXT),
-        Index('ix_tool_id_guid_map_guid', 'guid', unique=True, mysql_length=200),
-    )
+        Column("guid", TEXT, index=True, unique=True))
 
     metadata.reflect()
     try:

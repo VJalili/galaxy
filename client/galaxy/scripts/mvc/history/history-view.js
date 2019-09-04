@@ -469,7 +469,8 @@ var HistoryView = _super.extend(
             // if sent two strings (and possibly details as 'options'), use those as message and title
             if (_.isString(model) && _.isString(xhr)) {
                 var message = model;
-                return ERROR_MODAL.errorModal(message, xhr, options);
+                var title = xhr;
+                return ERROR_MODAL.errorModal(message, title, options);
             }
             // bad gateway
             // TODO: possibly to global handler
@@ -634,7 +635,7 @@ export function historyEntry(options) {
     $("#switch").click(function() {
         //##HACK:ity hack hack
         //##TODO: remove when out of iframe
-        const Galaxy = getGalaxyInstance();
+        let Galaxy = getGalaxyInstance();
         var hview = Galaxy.currHistoryPanel ? Galaxy.currHistoryPanel : null;
         if (hview) {
             hview.switchToHistory("${ history[ 'id' ] }");
@@ -648,12 +649,12 @@ export function historyEntry(options) {
         $("#center").addClass("flex-vertical-container");
     }
 
-    const viewClass = options.userIsOwner ? HistoryViewEdit.HistoryViewEdit : HistoryView.HistoryView;
-    const history = new History(options.historyJSON);
+    let viewClass = options.userIsOwner ? HistoryViewEdit.HistoryViewEdit : HistoryView.HistoryView;
+    let history = new History(options.historyJSON);
 
     // attach the copy dialog to the import button now that we have a history
     $("#import").click(function() {
-        const Galaxy = getGalaxyInstance();
+        let Galaxy = getGalaxyInstance();
         HistoryCopyDialog(history, {
             useImport: true,
             // use default datasets option to match the toggle-deleted button
@@ -667,7 +668,7 @@ export function historyEntry(options) {
         });
     });
 
-    const historyView = new viewClass({
+    let historyView = new viewClass({
         el: $("#history-" + options.historyJSON.id),
         className: viewClass.prototype.className + " wide",
         $scrollContainer: options.hasMasthead

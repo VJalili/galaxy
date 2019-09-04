@@ -5,38 +5,39 @@ from __future__ import print_function
 
 import logging
 
-from sqlalchemy import (
-    Column,
-    MetaData,
-    Table,
-    TEXT
-)
-
-from galaxy.model.migrate.versions.util import (
-    add_column,
-    add_index,
-    drop_column
-)
+from sqlalchemy import Column, Index, MetaData, Table, TEXT
 
 log = logging.getLogger(__name__)
 metadata = MetaData()
 
 
 def upgrade(migrate_engine):
-    print(__doc__)
     metadata.bind = migrate_engine
+
+    print(__doc__)
     metadata.reflect()
 
     StoredWorkflow_table = Table("stored_workflow", metadata, autoload=True)
+
+    # Create slug column.
     c = Column("slug", TEXT)
-    add_column(c, StoredWorkflow_table, metadata)
-    # Index needs to be added separately because MySQL cannot index a TEXT/BLOB
-    # column without specifying mysql_length
-    add_index('ix_stored_workflow_slug', StoredWorkflow_table, 'slug')
+    c.create(StoredWorkflow_table)
+
+    assert c is StoredWorkflow_table.c.slug
+
+    # Create slug index.
+    if migrate_engine.name != 'sqlite':
+        try:
+            i = Index("ix_stored_workflow_slug", StoredWorkflow_table.c.slug, mysql_length=200)
+            i.create()
+        except Exception:
+            # Mysql doesn't have a named index, but alter should work
+            StoredWorkflow_table.c.slug.alter(unique=False)
 
 
 def downgrade(migrate_engine):
     metadata.bind = migrate_engine
     metadata.reflect()
 
-    drop_column('slug', 'stored_workflow', metadata)
+    StoredWorkflow_table = Table("stored_workflow", metadata, autoload=True)
+    StoredWorkflow_table.c.slug.drop()

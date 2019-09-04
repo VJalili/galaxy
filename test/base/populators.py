@@ -23,7 +23,7 @@ from gxformat2 import (
 from pkg_resources import resource_string
 from six import StringIO
 
-from galaxy.tool_util.verify.test_data import TestDataResolver
+from galaxy.tools.verify.test_data import TestDataResolver
 from galaxy.util import unicodify
 from . import api_asserts
 
@@ -568,11 +568,6 @@ class BaseDatasetPopulator(object):
         self.wait_for_history(imported_history_id)
         return imported_history_id
 
-    def rename_history(self, history_id, new_name):
-        update_url = "histories/%s" % history_id
-        put_response = self._put(update_url, {"name": new_name})
-        return put_response
-
     def get_histories(self):
         history_index_response = self._get("histories")
         api_asserts.assert_status_code_is(history_index_response, 200)
@@ -581,16 +576,12 @@ class BaseDatasetPopulator(object):
     def wait_on_history_length(self, history_id, wait_on_history_length):
 
         def history_has_length():
-            history_length = self.history_length(history_id)
-            return None if history_length != wait_on_history_length else True
+            contents_response = self._get("histories/%s/contents" % history_id)
+            api_asserts.assert_status_code_is(contents_response, 200)
+            contents = contents_response.json()
+            return None if len(contents) != wait_on_history_length else True
 
         wait_on(history_has_length, desc="import history population")
-
-    def history_length(self, history_id):
-        contents_response = self._get("histories/%s/contents" % history_id)
-        api_asserts.assert_status_code_is(contents_response, 200)
-        contents = contents_response.json()
-        return len(contents)
 
     def reimport_history(self, history_id, history_name, wait_on_history_length, export_kwds, url, api_key):
         # Export the history.
@@ -1292,13 +1283,11 @@ class DatasetCollectionPopulator(BaseDatasetCollectionPopulator):
 
 def load_data_dict(history_id, test_data, dataset_populator, dataset_collection_populator):
 
-    def open_test_data(test_dict, mode="rb"):
+    def read_test_data(test_dict):
         test_data_resolver = TestDataResolver()
         filename = test_data_resolver.get_filename(test_dict["value"])
-        return open(filename, mode)
-
-    def read_test_data(test_dict):
-        return open_test_data(test_dict, mode="r").read()
+        content = open(filename, "r").read()
+        return content
 
     inputs = {}
     label_map = {}
@@ -1344,7 +1333,7 @@ def load_data_dict(history_id, test_data, dataset_populator, dataset_collection_
         elif is_dict and "type" in value:
             input_type = value["type"]
             if input_type == "File":
-                content = open_test_data(value)
+                content = read_test_data(value)
                 new_dataset_kwds = {
                     "content": content
                 }
@@ -1372,7 +1361,7 @@ def load_data_dict(history_id, test_data, dataset_populator, dataset_collection_
 def wait_on_state(state_func, desc="state", skip_states=["running", "queued", "new", "ready"], assert_ok=False, timeout=DEFAULT_TIMEOUT):
     def get_state():
         response = state_func()
-        assert response.status_code == 200, "Failed to fetch state update while waiting. [%s]" % response.content
+        assert response.status_code == 200, "Failed to fetch state update while waiting."
         state = response.json()["state"]
         if state in skip_states:
             return None

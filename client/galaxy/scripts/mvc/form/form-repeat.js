@@ -42,7 +42,7 @@ export var View = Backbone.View.extend({
 
     /** Add new repeat block */
     add: function(options) {
-        const Galaxy = getGalaxyInstance();
+        let Galaxy = getGalaxyInstance();
         if (!options.id || this.list[options.id]) {
             Galaxy.emit.debug("form-repeat::add()", "Duplicate or invalid repeat block id.");
             return;
@@ -75,7 +75,7 @@ export var View = Backbone.View.extend({
 
     /** Delete repeat block */
     del: function(id) {
-        const Galaxy = getGalaxyInstance();
+        let Galaxy = getGalaxyInstance();
         if (!this.list[id]) {
             Galaxy.emit.debug("form-repeat::del()", "Invalid repeat block id.");
             return;

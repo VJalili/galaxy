@@ -84,31 +84,24 @@ export default Backbone.View.extend({
         return terminalView;
     },
 
-    terminalViewForOutput: function(output) {
-        let terminalViewClass = TerminalViews.OutputTerminalView;
+    addDataOutput: function(output) {
+        var terminalViewClass = TerminalViews.OutputTerminalView;
+        var outputViewClass = DataViews.DataOutputView;
         if (output.collection) {
             terminalViewClass = TerminalViews.OutputCollectionTerminalView;
         } else if (output.parameter) {
             terminalViewClass = TerminalViews.OutputParameterTerminalView;
+            outputViewClass = DataViews.ParameterOutputView;
         }
-        return new terminalViewClass({
+        var terminalView = new terminalViewClass({
             node: this.node,
             output: output
         });
-    },
-
-    outputViewforOutput: function(output, terminalView) {
-        const outputViewClass = output.parameter ? DataViews.ParameterOutputView : DataViews.DataOutputView;
-        return new outputViewClass({
+        var outputView = new outputViewClass({
             output: output,
             terminalElement: terminalView.el,
             nodeView: this
         });
-    },
-
-    addDataOutput: function(output) {
-        const terminalView = this.terminalViewForOutput(output);
-        const outputView = this.outputViewforOutput(output, terminalView);
         this.outputViews[output.name] = outputView;
         this.tool_body.append(outputView.$el.append(terminalView.terminalElements()));
     },

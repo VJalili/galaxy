@@ -1,5 +1,4 @@
 import logging
-from collections import OrderedDict
 
 from sqlalchemy import (
     and_,
@@ -13,8 +12,9 @@ from galaxy import (
     util,
     web
 )
+from galaxy.util.odict import odict
+from galaxy.web.base.controller import BaseUIController
 from galaxy.web.form_builder import CheckboxField
-from galaxy.webapps.base.controller import BaseUIController
 from galaxy.webapps.tool_shed.util import ratings_util
 from tool_shed.util import (
     hg_util,
@@ -240,7 +240,7 @@ class RepositoryReviewController(BaseUIController, ratings_util.ItemRatings):
         status = kwd.get('status', 'done')
         review_id = kwd.get('id', None)
         review = review_util.get_review(trans.app, review_id)
-        components_dict = OrderedDict()
+        components_dict = odict()
         for component in review_util.get_components(trans.app):
             components_dict[component.name] = dict(component=component, component_review=None)
         repository = review.repository
@@ -486,7 +486,7 @@ class RepositoryReviewController(BaseUIController, ratings_util.ItemRatings):
             repo = hg_util.get_repo_for_repository(trans.app, repository=repository)
             metadata_revision_hashes = [metadata_revision.changeset_revision for metadata_revision in repository.metadata_revisions]
             reviewed_revision_hashes = [review.changeset_revision for review in repository.reviews]
-            reviews_dict = OrderedDict()
+            reviews_dict = odict()
             for changeset in hg_util.get_reversed_changelog_changesets(repo):
                 ctx = repo.changectx(changeset)
                 changeset_revision = str(ctx)

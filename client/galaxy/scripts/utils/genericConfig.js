@@ -3,7 +3,7 @@
  */
 
 export function buildConfig(defaultConfigs = {}) {
-    const storage = Object.assign({}, defaultConfigs);
+    let storage = Object.assign({}, defaultConfigs);
 
     return new Proxy(storage, {
         get(target, propName) {

@@ -155,18 +155,18 @@ var HistoryViewEdit = _super.extend(
 
         /** render the tags sub-view controller */
         _renderTags: function($where) {
-            const el = $where.find(".controls .tags-display")[0];
+            let el = $where.find(".controls .tags-display")[0];
 
-            const propsData = {
+            let propsData = {
                 model: this.model,
                 disabled: false,
                 context: "history-view-edit"
             };
 
-            const vm = mountModelTags(propsData, el);
+            let vm = mountModelTags(propsData, el);
 
             // tag icon button open/closes
-            const activator = faIconButton({
+            let activator = faIconButton({
                 title: _l("Edit history tags"),
                 classes: "history-tag-btn",
                 faIcon: "fa-tags",
@@ -247,76 +247,35 @@ var HistoryViewEdit = _super.extend(
          *  ajax calls made for multiple datasets are queued
          */
         multiselectActions: function() {
-            var Galaxy = getGalaxyInstance();
             var panel = this;
-
-            const batchUpdate = (key, value) => {
-                const actionModels = {};
-                const items = panel
-                    .getSelectedModels()
-                    .filter(model => {
-                        console.log(model.attributes[key]);
-                        return model.attributes[key] != value;
-                    })
-                    .map(model => {
-                        const res = {
-                            history_content_type: model.attributes.history_content_type,
-                            id: model.attributes.id
-                        };
-                        actionModels[model.id] = model;
-                        // Tried "optimistically" deleting the dataset - but it didn't quite work -
-                        // maybe history polling restored the previous state?
-                        return res;
-                    });
-
-                if (items.length == 0) {
-                    return;
-                }
-
-                const options = {};
-                options.url = `${Galaxy.root}api/histories/${this.model.id}/contents`;
-                options.type = "PUT";
-                const requestData = { items: items };
-                requestData[key] = value;
-                options.data = JSON.stringify(requestData);
-                options.contentType = "application/json";
-
-                var xhr = jQuery.ajax(options);
-                xhr.done((message, status, responseObj) => {
-                    for (const updated of message) {
-                        const typeId = updated.history_content_type + "-" + updated.id;
-                        actionModels[typeId].set(updated);
-                    }
-                });
-                xhr.fail((xhr, status, message) => {
-                    console.error(message);
-                });
-                return xhr;
-            };
 
             var actions = [
                 {
                     html: _l("Hide datasets"),
                     func: function() {
-                        batchUpdate("visible", false);
+                        var action = HDA_MODEL.HistoryDatasetAssociation.prototype.hide;
+                        panel.getSelectedModels().ajaxQueue(action);
                     }
                 },
                 {
                     html: _l("Unhide datasets"),
                     func: function() {
-                        batchUpdate("visible", true);
+                        var action = HDA_MODEL.HistoryDatasetAssociation.prototype.unhide;
+                        panel.getSelectedModels().ajaxQueue(action);
                     }
                 },
                 {
                     html: _l("Delete datasets"),
-                    func: () => {
-                        batchUpdate("deleted", true);
+                    func: function() {
+                        var action = HDA_MODEL.HistoryDatasetAssociation.prototype["delete"];
+                        panel.getSelectedModels().ajaxQueue(action);
                     }
                 },
                 {
                     html: _l("Undelete datasets"),
                     func: function() {
-                        batchUpdate("deleted", false);
+                        var action = HDA_MODEL.HistoryDatasetAssociation.prototype.undelete;
+                        panel.getSelectedModels().ajaxQueue(action);
                     }
                 }
             ];

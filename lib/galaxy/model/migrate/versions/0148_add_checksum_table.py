@@ -5,22 +5,13 @@ from __future__ import print_function
 
 import logging
 
-from sqlalchemy import (
-    Column,
-    ForeignKey,
-    Integer,
-    MetaData,
-    Table,
-    TEXT
-)
+from sqlalchemy import Column, ForeignKey, Integer, MetaData, Table, TEXT
 
 from galaxy.model.custom_types import JSONType
-from galaxy.model.migrate.versions.util import (
-    create_table,
-    drop_table
-)
 
 log = logging.getLogger(__name__)
+log.setLevel(logging.DEBUG)
+
 metadata = MetaData()
 
 dataset_source_table = Table(
@@ -54,14 +45,20 @@ def upgrade(migrate_engine):
     print(__doc__)
     metadata.bind = migrate_engine
     metadata.reflect()
-    create_table(dataset_source_table)
-    create_table(dataset_hash_table)
-    create_table(dataset_source_hash_table)
+    try:
+        dataset_source_table.create()
+        dataset_hash_table.create()
+        dataset_source_hash_table.create()
+    except Exception:
+        log.exception("Adding dataset source and hash tables failed.")
 
 
 def downgrade(migrate_engine):
     metadata.bind = migrate_engine
     metadata.reflect()
-    drop_table(dataset_source_hash_table)
-    drop_table(dataset_hash_table)
-    drop_table(dataset_source_table)
+    try:
+        dataset_source_hash_table.drop()
+        dataset_hash_table.drop()
+        dataset_source_table.drop()
+    except Exception:
+        log.exception("Dropping dataset source and hash tables failed.")

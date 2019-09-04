@@ -9,7 +9,7 @@ import galaxy.util
 from galaxy import web
 from galaxy.tools import DataSourceTool
 from galaxy.web import error, url_for
-from galaxy.webapps.base.controller import BaseUIController
+from galaxy.web.base.controller import BaseUIController
 
 log = logging.getLogger(__name__)
 
@@ -61,8 +61,7 @@ class ToolRunner(BaseUIController):
                                                         redirect=redirect))
         if not tool.allow_user_access(trans.user):
             return __tool_404__()
-        # FIXME: Tool class should define behavior
-        if tool.tool_type in ['default', 'realtime']:
+        if tool.tool_type == 'default':
             return trans.response.send_redirect(url_for(controller='root', tool_id=tool_id))
 
         # execute tool without displaying form (used for datasource tools)
@@ -78,7 +77,7 @@ class ToolRunner(BaseUIController):
         try:
             vars = tool.handle_input(trans, params.__dict__, history=history)
         except Exception as e:
-            error(galaxy.util.unicodify(e))
+            error(str(e))
         if len(params) > 0:
             trans.log_event('Tool params: %s' % (str(params)), tool_id=tool_id)
         return trans.fill_template('root/tool_runner.mako', **vars)

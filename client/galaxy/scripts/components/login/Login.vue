@@ -6,33 +6,26 @@
                 <b-form id="login" @submit.prevent="submitGalaxyLogin()">
                     <b-card no-body header="Welcome to Galaxy, please log in">
                         <b-card-body>
-                            <b-form-group label="Public name or Email Address">
+                            <b-form-group label="Username or Email Address">
                                 <b-form-input name="login" type="text" v-model="login" />
                             </b-form-group>
                             <b-form-group label="Password">
                                 <b-form-input name="password" type="password" v-model="password" />
                                 <b-form-text
-                                    >Forgot password? <a @click="reset" href="javascript:void(0)" role="button">Click here to reset your
-                                    password.</a> </b-form-text
+                                    >Forgot password? Click here to <a @click="reset" href="#">reset</a> your
+                                    password.</b-form-text
                                 >
                             </b-form-group>
                             <b-button name="login" type="submit">Login</b-button>
                         </b-card-body>
                         <b-card-footer>
                             Don't have an account?
-                            <span v-if="allowUserCreation">
-                                <a id="register-toggle" href="javascript:void(0)" role="button" @click.prevent="toggleLogin">Register here.</a>
-                            </span>
-                            <span v-else>
-                                Registration for this Galaxy instance is disabled. Please contact an administrator for
-                                assistance.
-                            </span>
+                            <a id="register-toggle" href="#" @click.prevent="toggleLogin">Register here.</a>
                         </b-card-footer>
                     </b-card>
                 </b-form>
-                <b-button v-for="idp in oidc_idps" :key="idp" class="d-block mt-3" @click="submitOIDCLogin(idp)">
-                    <i v-bind:class="oidc_idps_icons[idp]" /> Sign in with
-                    {{ idp.charAt(0).toUpperCase() + idp.slice(1) }}
+                <b-button v-if="enable_oidc" class="mt-3" @click="submitOIDCLogin()">
+                    <icon class="fa fa-google" /> Sign in with Google
                 </b-button>
             </div>
             <div v-if="show_welcome_with_login" class="col">
@@ -62,18 +55,7 @@ export default {
         }
     },
     data() {
-        const galaxy = getGalaxyInstance();
-        const oidc_idps = galaxy.config.oidc;
-        // Icons to use for each IdP
-        const oidc_idps_icons = { google: "fa fa-google" };
-        // Add default icons to IdPs without icons
-        oidc_idps
-            .filter(function(key) {
-                return oidc_idps_icons[key] === undefined;
-            })
-            .forEach(function(idp) {
-                oidc_idps_icons[idp] = "fa fa-id-card";
-            });
+        let galaxy = getGalaxyInstance();
         return {
             login: null,
             password: null,
@@ -81,12 +63,9 @@ export default {
             provider: null,
             messageText: null,
             messageVariant: null,
-            allowUserCreation: galaxy.config.allow_user_creation,
             redirect: galaxy.params.redirect,
             session_csrf_token: galaxy.session_csrf_token,
-            enable_oidc: galaxy.config.enable_oidc,
-            oidc_idps: oidc_idps,
-            oidc_idps_icons: oidc_idps_icons
+            enable_oidc: galaxy.config.enable_oidc
         };
     },
     computed: {
@@ -101,7 +80,7 @@ export default {
             }
         },
         submitGalaxyLogin: function(method) {
-            const rootUrl = getAppRoot();
+            let rootUrl = getAppRoot();
             axios
                 .post(`${rootUrl}user/login`, this.$data)
                 .then(response => {
@@ -118,28 +97,28 @@ export default {
                 })
                 .catch(error => {
                     this.messageVariant = "danger";
-                    const message = error.response.data && error.response.data.err_msg;
+                    let message = error.response.data && error.response.data.err_msg;
                     this.messageText = message || "Login failed for an unknown reason.";
                 });
         },
-        submitOIDCLogin: function(idp) {
-            const rootUrl = getAppRoot();
+        submitOIDCLogin: function(method) {
+            let rootUrl = getAppRoot();
             axios
-                .post(`${rootUrl}authnz/${idp}/login`)
+                .post(`${rootUrl}authnz/google/login`)
                 .then(response => {
                     if (response.data.redirect_uri) {
-                        window.location = response.data.redirect_uri;
+                        window.location = encodeURI(response.data.redirect_uri);
                     }
                     // Else do something intelligent or maybe throw an error -- what else does this endpoint possibly return?
                 })
                 .catch(error => {
                     this.messageVariant = "danger";
-                    const message = error.response.data && error.response.data.err_msg;
+                    let message = error.response.data && error.response.data.err_msg;
                     this.messageText = message || "Login failed for an unknown reason.";
                 });
         },
         reset: function(ev) {
-            const rootUrl = getAppRoot();
+            let rootUrl = getAppRoot();
             ev.preventDefault();
             axios
                 .post(`${rootUrl}user/reset_password`, { email: this.login })
@@ -149,7 +128,7 @@ export default {
                 })
                 .catch(error => {
                     this.messageVariant = "danger";
-                    const message = error.response.data && error.response.data.err_msg;
+                    let message = error.response.data && error.response.data.err_msg;
                     this.messageText = message || "Password reset failed for an unknown reason.";
                 });
         }

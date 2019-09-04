@@ -37,6 +37,7 @@
 
 <%def name="javascripts()">
     ${ h.js(
+        'libs/require',
         'bundled/libs.chunk',
         'bundled/base.chunk'
     )}
@@ -74,10 +75,8 @@
     </script>
     %endif
 
-    ${ galaxy_client.config_sentry(app) }
-    %if app.config.ga_code:
-        ${ galaxy_client.config_google_analytics(app.config.ga_code) }
-    %endif
+    ## ${ galaxy_client.config_sentry(app)}
+    ## ${ galaxy_client.config_google_analytics(app)}
 
 </%def>
 

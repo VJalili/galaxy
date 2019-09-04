@@ -29,15 +29,11 @@
 </template>
 <script>
 import _ from "underscore";
-import axios from "axios";
-import Vue from "vue";
-import BootstrapVue from "bootstrap-vue";
 import { getAppRoot } from "onload/loadConfig";
+import axios from "axios";
 import * as bibtexParse from "libs/bibtexParse";
 import { convertLaTeX } from "latex-to-unicode-converter";
 import { stringifyLaTeX } from "latex-parser";
-
-Vue.use(BootstrapVue);
 
 export default {
     props: {
@@ -75,17 +71,17 @@ export default {
             .get(`${getAppRoot()}api/${this.source}/${this.id}/citations`)
             .then(response => {
                 this.content = "";
-                for (const rawCitation of response.data) {
+                for (var rawCitation of response.data) {
                     try {
-                        const citation = {
+                        var citation = {
                             fields: {},
                             entryType: undefined
                         };
-                        let parsed = bibtexParse.toJSON(rawCitation.content);
+                        var parsed = bibtexParse.toJSON(rawCitation.content);
                         if (parsed) {
                             parsed = _.first(parsed);
                             citation.entryType = parsed.entryType || undefined;
-                            for (const key in parsed.entryTags) {
+                            for (var key in parsed.entryTags) {
                                 citation.fields[key.toLowerCase()] = parsed.entryTags[key];
                             }
                         }
@@ -102,18 +98,18 @@ export default {
     },
     methods: {
         formattedReference: function(citation) {
-            const entryType = citation.entryType;
-            const fields = citation.fields;
+            var entryType = citation.entryType;
+            var fields = citation.fields;
 
-            let ref = "";
-            const authorsAndYear = `${this._asSentence(
+            var ref = "";
+            var authorsAndYear = `${this._asSentence(
                 (fields.author ? fields.author : "") + (fields.year ? ` (${fields.year})` : "")
             )} `;
-            const title = fields.title || "";
-            const pages = fields.pages ? `pp. ${fields.pages}` : "";
-            const address = fields.address;
+            var title = fields.title || "";
+            var pages = fields.pages ? `pp. ${fields.pages}` : "";
+            var address = fields.address;
             if (entryType == "article") {
-                const volume =
+                var volume =
                     (fields.volume ? fields.volume : "") +
                     (fields.number ? ` (${fields.number})` : "") +
                     (pages ? `, ${pages}` : "");
@@ -148,19 +144,19 @@ export default {
                     fields.howpublished
                 )}${this._asSentence(fields.note)}`;
             }
-            let doiUrl = "";
+            var doiUrl = "";
             if (fields.doi) {
                 doiUrl = `https://doi.org/${fields.doi}`;
                 ref += `[<a href="${doiUrl}" target="_blank">doi:${fields.doi}</a>]`;
             }
-            const url = fields.url || doiUrl;
+            var url = fields.url || doiUrl;
             if (url) {
                 ref += `[<a href="${url}" target="_blank">Link</a>]`;
             }
             return convertLaTeX({ onError: (error, latex) => `{${stringifyLaTeX(latex)}}` }, ref);
         },
         _formatBookInfo: function(fields) {
-            let info = "";
+            var info = "";
             if (fields.chapter) {
                 info += `${fields.chapter} in `;
             }

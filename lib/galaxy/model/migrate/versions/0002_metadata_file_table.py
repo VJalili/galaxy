@@ -1,28 +1,14 @@
 """
 """
-from __future__ import print_function
-
 import datetime
 import logging
 
-from sqlalchemy import (
-    Boolean,
-    Column,
-    DateTime,
-    ForeignKey,
-    Integer,
-    MetaData,
-    Table,
-    TEXT
-)
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, MetaData, Table, TEXT
 
-from galaxy.model.migrate.versions.util import (
-    create_table,
-    drop_table
-)
+from galaxy.model.migrate.versions.util import create_table, drop_table
 
-log = logging.getLogger(__name__)
 now = datetime.datetime.utcnow
+log = logging.getLogger(__name__)
 metadata = MetaData()
 
 # New table in changeset 1568:0b022adfdc34
@@ -37,7 +23,6 @@ MetadataFile_table = Table("metadata_file", metadata,
 
 
 def upgrade(migrate_engine):
-    print(__doc__)
     metadata.bind = migrate_engine
     metadata.reflect()
 

@@ -11,11 +11,6 @@ function CollectionTypeDescription(collectionType) {
     this.rank = collectionType.split(":").length;
 }
 
-function ConnectionAcceptable(canAccept, reason) {
-    this.canAccept = canAccept;
-    this.reason = reason;
-}
-
 var NULL_COLLECTION_TYPE_DESCRIPTION = {
     isCollection: false,
     canMatch: function() {
@@ -165,7 +160,7 @@ var Terminal = Backbone.Model.extend({
         let output_val = val;
         if (this.multiple) {
             // emulate list input
-            const description = new CollectionTypeDescription("list");
+            let description = new CollectionTypeDescription("list");
             if (val.collectionType === description.collectionType) {
                 // No mapping over necessary
                 return;
@@ -195,9 +190,9 @@ var Terminal = Backbone.Model.extend({
     },
 
     resetCollectionTypeSource: function() {
-        const node = this.node;
+        let node = this.node;
         _.each(node.output_terminals, function(output_terminal) {
-            const type_source = output_terminal.attributes.collection_type_source;
+            let type_source = output_terminal.attributes.collection_type_source;
             if (type_source && output_terminal.attributes.collection_type) {
                 output_terminal.attributes.collection_type = null;
                 output_terminal.update(output_terminal.attributes);
@@ -212,7 +207,6 @@ var OutputTerminal = Terminal.extend({
     initialize: function(attr) {
         Terminal.prototype.initialize.call(this, attr);
         this.datatypes = attr.datatypes;
-        this.force_datatype = attr.force_datatype;
     },
 
     resetMappingIfNeeded: function() {
@@ -252,10 +246,7 @@ var BaseInputTerminal = Terminal.extend({
     },
     canAccept: function(other) {
         if (this._inputFilled()) {
-            return new ConnectionAcceptable(
-                false,
-                "Input already filled with another connection, delete it before connecting another output."
-            );
+            return false;
         } else {
             return this.attachable(other);
         }
@@ -292,9 +283,13 @@ var BaseInputTerminal = Terminal.extend({
             inputFilled = false;
         } else {
             if (this.multiple) {
-                // Can only attach one collection to multiple input
-                // data parameter.
-                inputFilled = !!this._collectionAttached();
+                if (this._collectionAttached()) {
+                    // Can only attach one collection to multiple input
+                    // data parameter.
+                    inputFilled = true;
+                } else {
+                    inputFilled = false;
+                }
             } else {
                 inputFilled = true;
             }
@@ -348,11 +343,22 @@ var BaseInputTerminal = Terminal.extend({
         for (var t in this.datatypes) {
             var thisDatatype = this.datatypes[t];
             if (thisDatatype == "input") {
-                return new ConnectionAcceptable(true, null);
+                return true;
             }
             var cat_outputs = [];
-            const other_datatypes = other.force_datatype ? [other.force_datatype] : other.datatypes;
-            cat_outputs = cat_outputs.concat(other_datatypes);
+            cat_outputs = cat_outputs.concat(other.datatypes);
+            if (other.node.post_job_actions) {
+                for (var pja_i in other.node.post_job_actions) {
+                    var pja = other.node.post_job_actions[pja_i];
+                    if (
+                        pja.action_type == "ChangeDatatypeAction" &&
+                        (pja.output_name === "" || pja.output_name == other.name) &&
+                        pja.action_arguments
+                    ) {
+                        cat_outputs.push(pja.action_arguments.newtype);
+                    }
+                }
+            }
             // FIXME: No idea what to do about case when datatype is 'input'
             for (var other_datatype_i in cat_outputs) {
                 var other_datatype = cat_outputs[other_datatype_i];
@@ -362,14 +368,11 @@ var BaseInputTerminal = Terminal.extend({
                     other_datatype == "input_collection" ||
                     window.workflow_globals.app.isSubType(cat_outputs[other_datatype_i], thisDatatype)
                 ) {
-                    return new ConnectionAcceptable(true, null);
+                    return true;
                 }
             }
         }
-        return new ConnectionAcceptable(
-            false,
-            `Effective output data type(s) [${cat_outputs}] do not appear to match input type(s) [${this.datatypes}].`
-        );
+        return false;
     },
     _otherCollectionType: function(other) {
         var otherCollectionType = NULL_COLLECTION_TYPE_DESCRIPTION;
@@ -407,23 +410,16 @@ var InputTerminal = BaseInputTerminal.extend({
         if (otherCollectionType.isCollection) {
             if (this.multiple) {
                 if (this.connected() && !this._collectionAttached()) {
-                    return new ConnectionAcceptable(
-                        false,
-                        "Cannot attach collections to data parameters with individual data inputs already attached."
-                    );
+                    // if single inputs attached, cannot also attach a
+                    // collection (yet...)
+                    return false;
                 }
-                if (otherCollectionType.collectionType && otherCollectionType.collectionType.endsWith("paired")) {
-                    return new ConnectionAcceptable(
-                        false,
-                        "Cannot attach paired inputs to multiple data parameters, only lists may be treated this way."
-                    );
+                if (otherCollectionType.collectionType.endsWith("paired")) {
+                    // shouldn't process pairs in multiple="true" input
+                    return false;
                 }
             }
             if (thisMapOver.isCollection && thisMapOver.canMatch(otherCollectionType)) {
-                return this._producesAcceptableDatatype(other);
-            } else if (this.multiple && new CollectionTypeDescription("list").canMatch(otherCollectionType)) {
-                // This handles the special case of a list input being connected to a multiple="true" data input.
-                // Nested lists would be correctly mapped over by the above condition.
                 return this._producesAcceptableDatatype(other);
             } else {
                 //  Need to check if this would break constraints...
@@ -431,32 +427,13 @@ var InputTerminal = BaseInputTerminal.extend({
                 if (mappingConstraints.every(_.bind(otherCollectionType.canMatch, otherCollectionType))) {
                     return this._producesAcceptableDatatype(other);
                 } else {
-                    if (thisMapOver.isCollection) {
-                        // incompatible collection type attached
-                        if (this.node.hasConnectedMappedInputTerminals()) {
-                            return new ConnectionAcceptable(
-                                false,
-                                "Can't map over this input with output collection type - other inputs have an incompatible map over collection type. Disconnect inputs (and potentially outputs) and retry."
-                            );
-                        } else {
-                            return new ConnectionAcceptable(
-                                false,
-                                "Can't map over this input with output collection type - this step has outputs defined constraining the mapping of this tool. Disconnect outputs and retry."
-                            );
-                        }
-                    } else {
-                        return new ConnectionAcceptable(
-                            false,
-                            "Can't map over this input with output collection type - an output of this tool is not mapped over constraining this input. Disconnect output(s) and retry."
-                        );
-                    }
+                    return false;
                 }
             }
         } else if (thisMapOver.isCollection) {
-            return new ConnectionAcceptable(
-                false,
-                "Cannot attach non-collection outputs to mapped over inputs, consider disconnecting inputs and outputs to reset this input's mapping."
-            );
+            // Attempting to match a non-collection output to an
+            // explicitly collection input.
+            return false;
         }
         return this._producesAcceptableDatatype(other);
     }
@@ -470,7 +447,7 @@ var InputParameterTerminal = BaseInputTerminal.extend({
         BaseInputTerminal.prototype.connect.call(this, connector);
     },
     attachable: function(other) {
-        return new ConnectionAcceptable(this.type == other.attributes.type, "");
+        return this.type == other.attributes.type;
     }
 });
 
@@ -496,7 +473,7 @@ var InputCollectionTerminal = BaseInputTerminal.extend({
         if (!other) {
             return;
         } else {
-            const node = this.node;
+            let node = this.node;
             _.each(node.output_terminals, function(output_terminal) {
                 if (output_terminal.attributes.collection_type_source && !connector.dragging) {
                     if (other.isMappedOver()) {
@@ -554,46 +531,20 @@ var InputCollectionTerminal = BaseInputTerminal.extend({
                 // Otherwise we need to mapOver
             } else if (thisMapOver.isCollection) {
                 // In this case, mapOver already set and we didn't match skipping...
-                if (this.node.hasConnectedMappedInputTerminals()) {
-                    return new ConnectionAcceptable(
-                        false,
-                        "Can't map over this input with output collection type - other inputs have an incompatible map over collection type. Disconnect inputs (and potentially outputs) and retry."
-                    );
-                } else {
-                    return new ConnectionAcceptable(
-                        false,
-                        "Can't map over this input with output collection type - this step has outputs defined constraining the mapping of this tool. Disconnect outputs and retry."
-                    );
-                }
+                return false;
             } else if (_.some(this.collectionTypes, collectionType => otherCollectionType.canMapOver(collectionType))) {
-                // we're not mapped over - but hey maybe we could be... lets check.
                 var effectiveMapOver = this._effectiveMapOver(other);
                 if (!effectiveMapOver.isCollection) {
-                    return new ConnectionAcceptable(false, "Incompatible collection type(s) for attachment.");
+                    return false;
                 }
                 //  Need to check if this would break constraints...
                 var mappingConstraints = this._mappingConstraints();
-                if (mappingConstraints.every(d => effectiveMapOver.canMatch(d))) {
+                if (mappingConstraints.every(effectiveMapOver.canMatch)) {
                     return this._producesAcceptableDatatype(other);
-                } else {
-                    if (this.node.hasConnectedMappedInputTerminals()) {
-                        return new ConnectionAcceptable(
-                            false,
-                            "Can't map over this input with output collection type - other inputs have an incompatible map over collection type. Disconnect inputs (and potentially outputs) and retry."
-                        );
-                    } else {
-                        return new ConnectionAcceptable(
-                            false,
-                            "Can't map over this input with output collection type - this step has outputs defined constraining the mapping of this tool. Disconnect outputs and retry."
-                        );
-                    }
                 }
-            } else {
-                return new ConnectionAcceptable(false, "Incompatible collection type(s) for attachment.");
             }
-        } else {
-            return new ConnectionAcceptable(false, "Cannot attach a data output to a collection input.");
         }
+        return false;
     }
 });
 
@@ -601,7 +552,6 @@ var OutputCollectionTerminal = Terminal.extend({
     initialize: function(attr) {
         Terminal.prototype.initialize.call(this, attr);
         this.datatypes = attr.datatypes;
-        this.force_datatype = attr.force_datatype;
         if (attr.collection_type) {
             this.collectionType = new CollectionTypeDescription(attr.collection_type);
         } else {
@@ -625,7 +575,7 @@ var OutputCollectionTerminal = Terminal.extend({
             newCollectionType = ANY_COLLECTION_TYPE_DESCRIPTION;
         }
 
-        const oldCollectionType = this.collectionType;
+        let oldCollectionType = this.collectionType;
         this.collectionType = newCollectionType;
         // we need to iterate over a copy, as we slice this.connectors in the process of destroying connections
         var connectors = this.connectors.slice(0);

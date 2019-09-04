@@ -1172,7 +1172,7 @@ var Circster = Backbone.View.extend({
                     icon_class: "disk--arrow",
                     title: _l("Save"),
                     on_click: function() {
-                        const Galaxy = getGalaxyInstance();
+                        let Galaxy = getGalaxyInstance();
 
                         // show saving dialog box
                         Galaxy.modal.show({

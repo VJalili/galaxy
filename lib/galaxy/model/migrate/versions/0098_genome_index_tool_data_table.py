@@ -5,26 +5,24 @@ from __future__ import print_function
 
 import datetime
 import logging
+import sys
 
-from sqlalchemy import (
-    Column,
-    DateTime,
-    ForeignKey,
-    Integer,
-    MetaData,
-    String,
-    Table
-)
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, MetaData, String, Table
 
-from galaxy.model.migrate.versions.util import (
-    create_table,
-    drop_table
-)
+from galaxy.model.migrate.versions.util import create_table, drop_table
 
-log = logging.getLogger(__name__)
 now = datetime.datetime.utcnow
+log = logging.getLogger(__name__)
+log.setLevel(logging.DEBUG)
+handler = logging.StreamHandler(sys.stdout)
+format = "%(name)s %(levelname)s %(asctime)s %(message)s"
+formatter = logging.Formatter(format)
+handler.setFormatter(formatter)
+log.addHandler(handler)
+
 metadata = MetaData()
 
+# New table in changeset TODO:TODO
 GenomeIndexToolData_table = Table("genome_index_tool_data", metadata,
                                   Column("id", Integer, primary_key=True),
                                   Column("job_id", Integer, ForeignKey("job.id"), index=True),

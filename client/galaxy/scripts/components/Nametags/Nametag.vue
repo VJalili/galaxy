@@ -14,7 +14,7 @@ export default {
             return this.tag.startsWith("name:") ? this.tag.replace("name:", "") : this.tag;
         },
         tagStyles() {
-            const { primary, contrasting, darker } = keyedColorScheme(this.tag);
+            let { primary, contrasting, darker } = keyedColorScheme(this.tag);
             return {
                 "background-color": primary,
                 color: contrasting,

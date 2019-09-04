@@ -4,11 +4,11 @@ API Controller providing Galaxy Tours
 import logging
 
 from galaxy.web import (
-    expose_api_anonymous_and_sessionless,
-    legacy_expose_api,
+    _future_expose_api_anonymous_and_sessionless as expose_api_anonymous_and_sessionless,
+    expose_api,
     require_admin
 )
-from galaxy.webapps.base.controller import BaseAPIController
+from galaxy.web.base.controller import BaseAPIController
 
 log = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ class ToursController(BaseAPIController):
         """
         return self.app.tour_registry.tour_contents(tour_id)
 
-    @legacy_expose_api
+    @expose_api
     @require_admin
     def update_tour(self, trans, tour_id, **kwd):
         """

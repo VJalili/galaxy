@@ -13,10 +13,10 @@ from galaxy.managers import (
     roles
 )
 from galaxy.web import (
-    expose_api,
-    expose_api_anonymous,
+    _future_expose_api as expose_api,
+    _future_expose_api_anonymous as expose_api_anonymous
 )
-from galaxy.webapps.base.controller import BaseAPIController
+from galaxy.web.base.controller import BaseAPIController
 
 log = logging.getLogger(__name__)
 

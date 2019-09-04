@@ -9,7 +9,6 @@ from subprocess import (
     STDOUT
 )
 
-from galaxy.util import unicodify
 from ..external import parse_external_id
 
 DEFAULT_QUERY_CLASSAD = dict(
@@ -83,7 +82,7 @@ def condor_submit(submit_file):
         else:
             message = PROBLEM_PARSING_EXTERNAL_ID
     except Exception as e:
-        message = unicodify(e)
+        message = str(e)
     return external_id, message
 
 
@@ -98,7 +97,7 @@ def condor_stop(external_id):
     except CalledProcessError:
         failure_message = "condor_rm failed"
     except Exception as e:
-        failure_message = "error encountered calling condor_rm: %s" % unicodify(e)
+        "error encountered calling condor_rm: %s" % e
     return failure_message
 
 

@@ -1,7 +1,8 @@
-from galaxy.selenium.navigates_galaxy import (
+from galaxy_selenium.navigates_galaxy import (
     exception_indicates_not_clickable,
     exception_seems_to_indicate_transition,
 )
+
 from .framework import (
     selenium_test,
     SeleniumTestCase,

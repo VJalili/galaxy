@@ -7,7 +7,7 @@
             <register
                 :registration_warning_message="registration_warning_message"
                 :mailing_join_addr="mailing_join_addr"
-                :server_mail_configured="server_mail_configured"
+                :smtp_server="smtp_server"
             />
         </template>
     </div>
@@ -57,8 +57,8 @@ export default {
             type: String,
             required: false
         },
-        server_mail_configured: {
-            type: Boolean,
+        smtp_server: {
+            type: String,
             required: false
         }
     }

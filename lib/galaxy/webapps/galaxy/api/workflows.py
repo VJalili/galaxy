@@ -26,11 +26,9 @@ from galaxy.model.item_attrs import UsesAnnotations
 from galaxy.tools.parameters import populate_state
 from galaxy.tools.parameters.basic import workflow_building_modes
 from galaxy.util.sanitize_html import sanitize_html
-from galaxy.web import (
-    expose_api,
-    expose_api_anonymous_and_sessionless,
-)
-from galaxy.webapps.base.controller import (
+from galaxy.web import _future_expose_api as expose_api
+from galaxy.web import _future_expose_api_anonymous_and_sessionless as expose_api_anonymous_and_sessionless
+from galaxy.web.base.controller import (
     BaseAPIController,
     SharableMixin,
     url_for,
@@ -422,17 +420,7 @@ class WorkflowsAPIController(BaseAPIController, UsesStoredWorkflowMixin, UsesAnn
     def workflow_dict(self, trans, workflow_id, **kwd):
         """
         GET /api/workflows/{encoded_workflow_id}/download
-
-        Returns a selected workflow.
-
-        :type   style:  str
-        :param  style:  Style of export. The default is 'export', which is the meant to be used
-                        with workflow import endpoints. Other formats such as 'instance', 'editor',
-                        'run' are more tied to the GUI and should not be considered stable APIs.
-                        The default format for 'export' is specified by the
-                        admin with the `default_workflow_export_format` config
-                        option. Style can be specified as either 'ga' or 'format2' directly
-                        to be explicit about which format to download.
+        Returns a selected workflow as a json dictionary.
         """
         stored_workflow = self.__get_stored_accessible_workflow(trans, workflow_id)
 
@@ -443,11 +431,7 @@ class WorkflowsAPIController(BaseAPIController, UsesStoredWorkflowMixin, UsesAnn
         if download_format == 'json-download':
             sname = stored_workflow.name
             sname = ''.join(c in util.FILENAME_VALID_CHARS and c or '_' for c in sname)[0:150]
-            if ret_dict.get("format-version", None) == "0.1":
-                extension = "ga"
-            else:
-                extension = "gxwf.json"
-            trans.response.headers["Content-Disposition"] = 'attachment; filename="Galaxy-Workflow-%s.%s"' % (sname, extension)
+            trans.response.headers["Content-Disposition"] = 'attachment; filename="Galaxy-Workflow-%s.ga"' % (sname)
             trans.response.set_content_type('application/galaxy-archive')
         return ret_dict
 
@@ -466,7 +450,7 @@ class WorkflowsAPIController(BaseAPIController, UsesStoredWorkflowMixin, UsesAnn
             stored_workflow = trans.sa_session.query(self.app.model.StoredWorkflow).get(self.decode_id(workflow_id))
         except Exception as e:
             trans.response.status = 400
-            return ("Workflow with ID='%s' can not be found\n Exception: %s") % (workflow_id, util.unicodify(e))
+            return ("Workflow with ID='%s' can not be found\n Exception: %s") % (workflow_id, str(e))
 
         # check to see if user has permissions to selected workflow
         if stored_workflow.user != trans.user and not trans.user_is_admin:
@@ -552,8 +536,7 @@ class WorkflowsAPIController(BaseAPIController, UsesStoredWorkflowMixin, UsesAnn
                     if (trans.security.decode_id(id) in entries):
                         trans.get_user().stored_workflow_menu_entries.remove(entries[trans.security.decode_id(id)])
             # set tags
-            if 'tags' in workflow_dict:
-                trans.app.tag_handler.set_tags_from_list(user=trans.user, item=stored_workflow, new_tags_list=workflow_dict['tags'])
+            trans.app.tag_handler.set_tags_from_list(user=trans.user, item=stored_workflow, new_tags_list=workflow_dict.get('tags', []))
 
             if 'steps' in workflow_dict:
                 try:
@@ -566,6 +549,9 @@ class WorkflowsAPIController(BaseAPIController, UsesStoredWorkflowMixin, UsesAnn
                     )
                 except workflows.MissingToolsException:
                     raise exceptions.MessageException("This workflow contains missing tools. It cannot be saved until they have been removed from the workflow or installed.")
+            else:
+                # We only adjusted tags and menu entry
+                return payload
         else:
             message = "Updating workflow requires dictionary containing 'workflow' attribute with new JSON description."
             raise exceptions.RequestParameterInvalidException(message)
@@ -602,10 +588,7 @@ class WorkflowsAPIController(BaseAPIController, UsesStoredWorkflowMixin, UsesAnn
         try:
             data = json.loads(archive_data)
         except Exception:
-            if "GalaxyWorkflow" in archive_data:
-                data = {"yaml_content": archive_data}
-            else:
-                raise exceptions.MessageException("The data content does not appear to be a valid workflow.")
+            raise exceptions.MessageException("The data content does not appear to be a valid workflow.")
         if not data:
             raise exceptions.MessageException("The data content is missing.")
         raw_workflow_description = self.__normalize_workflow(trans, data)
@@ -798,11 +781,9 @@ class WorkflowsAPIController(BaseAPIController, UsesStoredWorkflowMixin, UsesAnn
         else:
             history_id = None
 
-        if not trans.user_is_admin:
-            # We restrict the query to the current users' invocations
+        if stored_workflow_id is None and encoded_history_id is None:
             user_id = trans.user.id
         else:
-            # Get all invocation if user is admin
             user_id = None
 
         invocations = self.workflow_manager.build_invocations_query(

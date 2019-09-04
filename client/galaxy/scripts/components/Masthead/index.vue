@@ -22,7 +22,7 @@ export default {
                 return;
             }
 
-            const galaxy = getGalaxyInstance();
+            let galaxy = getGalaxyInstance();
 
             // old backbone view
             if (!galaxy.masthead) {
@@ -30,7 +30,7 @@ export default {
             }
 
             // bolt the rendered DOM onto the vue component's element
-            const backboneDom = galaxy.masthead.render();
+            let backboneDom = galaxy.masthead.render();
             this.$el.appendChild(backboneDom.$el[0]);
         }
     }

@@ -12,10 +12,7 @@ import { getAppRoot } from "onload/loadConfig";
 import "libs/bootstrap-tour";
 
 // bootstrap-tour configures a window.Tour object; keep a local ref.
-const Tour = window.Tour;
-
-// For buttons to show, we need to add them to bootstrap/popper's sanitizing filters.
-$.fn.tooltip.Constructor.Default.whiteList.button = ["data-role"];
+let Tour = window.Tour;
 
 var gxy_root = getAppRoot();
 
@@ -206,10 +203,10 @@ export var ToursView = Backbone.View.extend({
 });
 
 export function giveTourWithData(data) {
-    const hookedTourData = hooked_tour_from_data(data);
+    let hookedTourData = hooked_tour_from_data(data);
     window.sessionStorage.setItem("activeGalaxyTour", JSON.stringify(data));
     // Store tour steps in sessionStorage to easily persist w/o hackery.
-    const tour = new Tour(_.extend({ steps: hookedTourData.steps }, tour_opts));
+    let tour = new Tour(_.extend({ steps: hookedTourData.steps }, tour_opts));
     // Always clean restart, since this is a new, explicit execution.
     tour.init();
     tour.goTo(0);

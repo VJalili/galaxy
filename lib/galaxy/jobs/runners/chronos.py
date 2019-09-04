@@ -5,7 +5,6 @@ import logging
 
 from galaxy import model
 from galaxy.jobs.runners import AsynchronousJobRunner, AsynchronousJobState
-from galaxy.util import unicodify
 
 CHRONOS_IMPORT_MSG = ('The Python \'chronos\' package is required to use '
                       'this feature, please install it or correct the '
@@ -21,7 +20,7 @@ try:
     )
 except ImportError as e:
     chronos = None
-    CHRONOS_IMPORT_MSG.format(msg=unicodify(e))
+    CHRONOS_IMPORT_MSG.format(msg=str(e))
 
 
 __all__ = ('ChronosJobRunner',)
@@ -41,7 +40,7 @@ def handle_exception_call(func):
         try:
             return func(*args, **kwargs)
         except chronos_exceptions as e:
-            LOGGER.error(unicodify(e))
+            LOGGER.error(str(e))
 
     return wrapper
 

@@ -59,7 +59,7 @@ export default {
         };
     },
     created: function() {
-        const url = getAppRoot() + "history/view/" + this.id;
+        let url = getAppRoot() + "history/view/" + this.id;
         this.ajaxCall(url, this.updateHistoryView);
     },
     methods: {
@@ -86,7 +86,7 @@ export default {
         },
         makeHistoryView: function(history) {
             $(function() {
-                const options = {
+                let options = {
                     hasMasthead: history.use_panels ? "true" : "false",
                     userIsOwner: history.user_is_owner ? "true" : "false",
                     isCurrent: history.history_is_current ? "true" : "false",
@@ -104,14 +104,14 @@ export default {
             });
         },
         showStructure: function() {
-            const Galaxy = getGalaxyInstance();
-            const displayStructureInstance = Vue.extend(DisplayStructure),
+            let Galaxy = getGalaxyInstance();
+            let displayStructureInstance = Vue.extend(DisplayStructure),
                 mountView = document.createElement("div");
             Galaxy.page.center.display(mountView);
             new displayStructureInstance({ propsData: { id: QueryStringParsing.get("id") } }).$mount(mountView);
         },
         switchHistory: function() {
-            const url = getAppRoot() + "history/switch_to_history?hist_id=" + this.historyHistory["id"];
+            let url = getAppRoot() + "history/switch_to_history?hist_id=" + this.historyHistory["id"];
             this.ajaxCall(url, this.reloadPage);
         },
         reloadPage: function() {

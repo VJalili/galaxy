@@ -63,7 +63,7 @@ var DatasetListItemEdit = _super.extend(
                 faIcon: "fa-pencil",
                 classes: "edit-btn",
                 onclick: function(ev) {
-                    const Galaxy = getGalaxyInstance();
+                    let Galaxy = getGalaxyInstance();
                     if (Galaxy.router) {
                         ev.preventDefault();
                         Galaxy.router.push("datasets/edit", {
@@ -164,7 +164,7 @@ var DatasetListItemEdit = _super.extend(
                     });
             };
 
-            const Galaxy = getGalaxyInstance();
+            let Galaxy = getGalaxyInstance();
             if (Galaxy.user.id === null) {
                 return null;
             }
@@ -226,7 +226,7 @@ var DatasetListItemEdit = _super.extend(
                 classes: "report-error-btn",
                 faIcon: "fa-bug",
                 onclick: function(ev) {
-                    const Galaxy = getGalaxyInstance();
+                    let Galaxy = getGalaxyInstance();
                     if (Galaxy.router) {
                         ev.preventDefault();
                         Galaxy.router.push("datasets/error", {
@@ -248,7 +248,7 @@ var DatasetListItemEdit = _super.extend(
                     target: this.linkTarget,
                     faIcon: "fa-refresh",
                     onclick: function(ev) {
-                        const Galaxy = getGalaxyInstance();
+                        let Galaxy = getGalaxyInstance();
                         if (Galaxy.router) {
                             ev.preventDefault();
                             Galaxy.router.push("/", {
@@ -263,30 +263,25 @@ var DatasetListItemEdit = _super.extend(
         /** Render an icon-button or popupmenu of links based on the applicable visualizations */
         _renderVisualizationsButton: function() {
             //TODO: someday - lazyload visualizations
-            const Galaxy = getGalaxyInstance();
-            const visualizations = this.model.get("visualizations");
-            if (
-                !Galaxy.config.visualizations_visible ||
-                this.model.isDeletedOrPurged() ||
-                !this.hasUser ||
-                !this.model.hasData() ||
-                _.isEmpty(visualizations)
-            ) {
+            var visualizations = this.model.get("visualizations");
+            if (this.model.isDeletedOrPurged() || !this.hasUser || !this.model.hasData() || _.isEmpty(visualizations)) {
                 return null;
             }
             if (!_.isObject(visualizations[0])) {
                 this.warn("Visualizations have been switched off");
                 return null;
             }
+
             if (visualizations.length >= 1) {
-                const dsid = this.model.get("id");
-                const url = getAppRoot() + "visualizations?dataset_id=" + dsid;
+                let dsid = this.model.get("id");
+                let url = getAppRoot() + "visualizations?dataset_id=" + dsid;
                 return faIconButton({
                     title: _l("Visualize this data"),
                     href: url,
                     classes: "visualization-link",
                     faIcon: "fa-bar-chart-o",
                     onclick: ev => {
+                        let Galaxy = getGalaxyInstance();
                         if (Galaxy.frame && Galaxy.frame.active) {
                             ev.preventDefault();
                             Galaxy.frame.add({ url: url, title: "Visualization" });
@@ -308,24 +303,24 @@ var DatasetListItemEdit = _super.extend(
                 return;
             }
 
-            const el = $where.find(".tags-display")[0];
+            let el = $where.find(".tags-display")[0];
 
-            const propsData = {
+            let propsData = {
                 model: this.model,
                 disabled: false,
                 context: "dataset-li-edit"
             };
 
-            const vm = mountModelTags(propsData, el);
+            let vm = mountModelTags(propsData, el);
 
             // tag icon button open/closes
-            const activator = faIconButton({
+            let activator = faIconButton({
                 title: _l("Edit dataset tags"),
                 classes: "tag-btn",
                 faIcon: "fa-tags"
             }).appendTo($where.find(".actions .right"));
 
-            const toggleEditor = () => {
+            let toggleEditor = () => {
                 $(vm.$el).toggleClass("active");
                 this.tagsEditorShown = $(vm.$el).hasClass("active");
             };
@@ -333,7 +328,7 @@ var DatasetListItemEdit = _super.extend(
             activator.on("click", toggleEditor);
 
             if (this.tagsEditorShown) {
-                const editorIsOpen = $(vm.$el).hasClass("active");
+                let editorIsOpen = $(vm.$el).hasClass("active");
                 if (!editorIsOpen) {
                     toggleEditor();
                 }
@@ -472,8 +467,41 @@ DatasetListItemEdit.prototype.templates = (() => {
             "dataset"
         )
     });
+
+    var visualizationsTemplate = BASE_MVC.wrapTemplate(
+        [
+            "<% if( visualizations.length === 1 ){ %>",
+            '<a class="visualization-link icon-btn" href="<%- visualizations[0].href %>"',
+            ' target="<%- visualizations[0].target %>" title="',
+            _l("Visualize in"),
+            ' <%- visualizations[0].html %>">',
+            '<span class="fa fa-bar-chart-o"></span>',
+            "</a>",
+
+            "<% } else { %>",
+            '<div class="visualizations-dropdown dropdown icon-btn">',
+            '<a data-toggle="dropdown" title="',
+            _l("Visualize"),
+            '">',
+            '<span class="fa fa-bar-chart-o"></span>',
+            "</a>",
+            '<ul class="dropdown-menu" role="menu">',
+            "<% _.each( visualizations, function( visualization ){ %>",
+            '<li><a class="visualization-link" href="<%- visualization.href %>"',
+            ' target="<%- visualization.target %>">',
+            "<%- visualization.html %>",
+            "</a></li>",
+            "<% }); %>",
+            "</ul>",
+            "</div>",
+            "<% } %>"
+        ],
+        "visualizations"
+    );
+
     return _.extend({}, _super.prototype.templates, {
-        warnings: warnings
+        warnings: warnings,
+        visualizations: visualizationsTemplate
     });
 })();
 

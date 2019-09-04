@@ -1,30 +1,26 @@
 """
 Migration script to update the deferred job parameters for liftover transfer jobs.
 """
-from __future__ import print_function
-
 import datetime
 import logging
+import sys
 
-from sqlalchemy import (
-    Column,
-    DateTime,
-    Integer,
-    MetaData,
-    String,
-    Table
-)
-from sqlalchemy.orm import (
-    mapper,
-    scoped_session,
-    sessionmaker
-)
+from sqlalchemy import Column, DateTime, Integer, MetaData, String, Table
+from sqlalchemy.orm import mapper, scoped_session, sessionmaker
 
+# Need our custom types, but don't import anything else from model
 from galaxy.model.custom_types import JSONType
 from galaxy.util.bunch import Bunch
 
-log = logging.getLogger(__name__)
 now = datetime.datetime.utcnow
+log = logging.getLogger(__name__)
+log.setLevel(logging.DEBUG)
+handler = logging.StreamHandler(sys.stdout)
+format = "%(name)s %(levelname)s %(asctime)s %(message)s"
+formatter = logging.Formatter(format)
+handler.setFormatter(formatter)
+log.addHandler(handler)
+
 metadata = MetaData()
 context = scoped_session(sessionmaker(autoflush=False, autocommit=True))
 
@@ -55,7 +51,6 @@ mapper(DeferredJob, DeferredJob.table, properties={})
 
 
 def upgrade(migrate_engine):
-    print(__doc__)
     metadata.bind = migrate_engine
 
     liftoverjobs = dict()

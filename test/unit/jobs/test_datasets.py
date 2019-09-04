@@ -1,4 +1,4 @@
-from galaxy.job_execution.datasets import DatasetPath
+from galaxy.jobs.datasets import DatasetPath
 
 
 def test_dataset_path():

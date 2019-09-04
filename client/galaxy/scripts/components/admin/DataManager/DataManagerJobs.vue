@@ -133,7 +133,7 @@ export default {
             ];
         },
         tableFields() {
-            const tableFields = this.fields.slice(0);
+            let tableFields = this.fields.slice(0);
             if (this.showCommandLine) {
                 tableFields.splice(5, 0, {
                     key: "commandLine",
@@ -143,9 +143,9 @@ export default {
             return tableFields;
         },
         tableItems() {
-            const tableItems = this.jobs.slice(0);
+            let tableItems = this.jobs.slice(0);
 
-            for (const item of tableItems) {
+            for (let item of tableItems) {
                 // Nicer time formatting
                 item["updateTime"] = item["updateTime"].replace("T", "\n");
 

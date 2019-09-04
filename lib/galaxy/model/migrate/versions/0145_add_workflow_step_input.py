@@ -5,24 +5,19 @@ from __future__ import print_function
 
 import logging
 
-from migrate import ForeignKeyConstraint as MigrateForeignKeyConstraint
 from sqlalchemy import (
     Boolean,
     Column,
     ForeignKey,
-    Index,
     Integer,
     MetaData,
     Table,
     TEXT,
+    UniqueConstraint
 )
 
 from galaxy.model.custom_types import JSONType
-from galaxy.model.migrate.versions.util import (
-    create_table,
-    drop_index,
-    drop_table
-)
+from galaxy.model.migrate.versions.util import create_table, drop_table
 
 log = logging.getLogger(__name__)
 metadata = MetaData()
@@ -39,7 +34,7 @@ WorkflowStepInput_table = Table(
     Column("default_value", JSONType),
     Column("default_value_set", Boolean, default=False),
     Column("runtime_value", Boolean, default=False),
-    Index('ix_workflow_step_input_workflow_step_id_name_unique', "workflow_step_id", "name", unique=True, mysql_length={'name': 200}),
+    UniqueConstraint("workflow_step_id", "name"),
 )
 
 
@@ -49,15 +44,8 @@ def upgrade(migrate_engine):
     metadata.reflect()
 
     OldWorkflowStepConnection_table = Table("workflow_step_connection", metadata, autoload=True)
-    for fkc in OldWorkflowStepConnection_table.foreign_key_constraints:
-        mfkc = MigrateForeignKeyConstraint([_.parent for _ in fkc.elements], [_.column for _ in fkc.elements], name=fkc.name)
-        try:
-            mfkc.drop()
-        except Exception:
-            log.exception("Dropping foreign key constraint '%s' from table '%s' failed", mfkc.name, OldWorkflowStepConnection_table)
-
     for index in OldWorkflowStepConnection_table.indexes:
-        drop_index(index, OldWorkflowStepConnection_table)
+        index.drop()
     OldWorkflowStepConnection_table.rename("workflow_step_connection_preupgrade145")
     # Try to deregister that table to work around some caching problems it seems.
     OldWorkflowStepConnection_table.deregister()
@@ -92,15 +80,8 @@ def downgrade(migrate_engine):
     metadata.bind = migrate_engine
 
     NewWorkflowStepConnection_table = Table("workflow_step_connection", metadata, autoload=True)
-    for fkc in NewWorkflowStepConnection_table.foreign_key_constraints:
-        mfkc = MigrateForeignKeyConstraint([_.parent for _ in fkc.elements], [_.column for _ in fkc.elements], name=fkc.name)
-        try:
-            mfkc.drop()
-        except Exception:
-            log.exception("Dropping foreign key constraint '%s' from table '%s' failed", mfkc.name, NewWorkflowStepConnection_table)
-
     for index in NewWorkflowStepConnection_table.indexes:
-        drop_index(index, NewWorkflowStepConnection_table)
+        index.drop()
     NewWorkflowStepConnection_table.rename("workflow_step_connection_predowngrade145")
     # Try to deregister that table to work around some caching problems it seems.
     NewWorkflowStepConnection_table.deregister()

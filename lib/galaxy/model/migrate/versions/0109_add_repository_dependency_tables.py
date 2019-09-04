@@ -5,23 +5,19 @@ from __future__ import print_function
 
 import datetime
 import logging
+import sys
 
-from sqlalchemy import (
-    Column,
-    DateTime,
-    ForeignKey,
-    Integer,
-    MetaData,
-    Table
-)
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, MetaData, Table
 
-from galaxy.model.migrate.versions.util import (
-    create_table,
-    drop_table
-)
-
-log = logging.getLogger(__name__)
 now = datetime.datetime.utcnow
+log = logging.getLogger(__name__)
+log.setLevel(logging.DEBUG)
+handler = logging.StreamHandler(sys.stdout)
+format = "%(name)s %(levelname)s %(asctime)s %(message)s"
+formatter = logging.Formatter(format)
+handler.setFormatter(formatter)
+log.addHandler(handler)
+
 metadata = MetaData()
 
 RepositoryDependency_table = Table("repository_dependency", metadata,
@@ -42,14 +38,24 @@ def upgrade(migrate_engine):
     print(__doc__)
     metadata.bind = migrate_engine
     metadata.reflect()
-
-    create_table(RepositoryDependency_table)
-    create_table(RepositoryRepositoryDependencyAssociation_table)
+    try:
+        RepositoryDependency_table.create()
+    except Exception:
+        log.exception("Creating repository_dependency table failed.")
+    try:
+        RepositoryRepositoryDependencyAssociation_table.create()
+    except Exception:
+        log.exception("Creating repository_repository_dependency_association table failed.")
 
 
 def downgrade(migrate_engine):
     metadata.bind = migrate_engine
     metadata.reflect()
-
-    drop_table(RepositoryRepositoryDependencyAssociation_table)
-    drop_table(RepositoryDependency_table)
+    try:
+        RepositoryRepositoryDependencyAssociation_table.drop()
+    except Exception:
+        log.exception("Dropping repository_repository_dependency_association table failed.")
+    try:
+        RepositoryDependency_table.drop()
+    except Exception:
+        log.exception("Dropping repository_dependency table failed.")

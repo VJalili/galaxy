@@ -21,10 +21,9 @@ from galaxy.model.item_attrs import UsesAnnotations
 from galaxy.util import (
     FILENAME_VALID_CHARS,
     listify,
-    string_as_bool,
-    unicodify,
+    string_as_bool
 )
-from galaxy.webapps.base import controller
+from galaxy.web.base import controller
 
 log = logging.getLogger(__name__)
 
@@ -342,7 +341,7 @@ class RootController(controller.JSAppLauncher, UsesAnnotations):
             trans.log_event("Added dataset %d to history %d" % (data.id, trans.history.id))
             return trans.show_ok_message("Dataset " + str(data.hid) + " added to history " + str(history_id) + ".")
         except Exception as e:
-            msg = "Failed to add dataset to history: %s" % unicodify(e)
+            msg = "Failed to add dataset to history: %s" % (e)
             log.error(msg)
             trans.log_event(msg)
             return trans.show_error_message("Adding File to History has Failed")
