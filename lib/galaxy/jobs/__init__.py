@@ -1642,6 +1642,7 @@ class JobWrapper(HasResourceParameters):
         for da in job.output_datasets + job.output_library_datasets:
             da_false_path = dataset_path_rewriter.rewrite_dataset_path(da.dataset, 'output')
             mutable = da.dataset.dataset.external_filename is None
+            # jjjjjjjjjjjjjjjjjjjjjjjjjjj
             dataset_path = DatasetPath(da.dataset.dataset.id, da.dataset.file_name, false_path=da_false_path, mutable=mutable)
             results.append((da.name, da.dataset, dataset_path))
 
