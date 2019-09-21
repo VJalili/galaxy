@@ -19,12 +19,14 @@ DEFAULTS = {
 
 BACKENDS = {
     'google': 'social_core.backends.google_openidconnect.GoogleOpenIdConnect',
-    "globus": "social_core.backends.globus.GlobusOpenIdConnect"
+    "globus": "social_core.backends.globus.GlobusOpenIdConnect",
+    "fence": "social_core.backends.fence.Fence"
 }
 
 BACKENDS_NAME = {
     'google': 'google-openidconnect',
-    "globus": "globus"
+    "globus": "globus",
+    "fence": "fence"
 }
 
 AUTH_PIPELINE = (
@@ -91,6 +93,7 @@ class PSAAuthnz(IdentityProvider):
         self.config['SOCIAL_AUTH_PIPELINE'] = AUTH_PIPELINE
         self.config['DISCONNECT_PIPELINE'] = DISCONNECT_PIPELINE
         self.config[setting_name('AUTHENTICATION_BACKENDS')] = (BACKENDS[provider],)
+        self.config["VERIFY_SSL"] = False
 
         # The following config sets PSA to call the `_login_user` function for
         # logging in a user. If this setting is set to false, the `_login_user`
@@ -108,6 +111,7 @@ class PSAAuthnz(IdentityProvider):
         self.config['redirect_uri'] = oidc_backend_config.get('redirect_uri')
         if oidc_backend_config.get('prompt') is not None:
             self.config[setting_name('AUTH_EXTRA_ARGUMENTS')]['prompt'] = oidc_backend_config.get('prompt')
+        self.config[setting_name('URL')] = 'http://localhost/user/'
 
     def _get_helper(self, name, do_import=False):
         this_config = self.config.get(setting_name(name), DEFAULTS.get(name, None))
