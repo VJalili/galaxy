@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<OIDC>
+    <provider name="Google">
+        <client_id>893677542423-4t761afe33k3o9mu56u6p6p1ctk8o88f.apps.googleusercontent.com</client_id>
+        <client_secret>9RzYxV2PTXcJkUK_poxsvdsW</client_secret>
+        <redirect_uri>http://localhost:8080/authnz/google/callback</redirect_uri>
+        <prompt>consent</prompt>
+    </provider>
+</OIDC>
