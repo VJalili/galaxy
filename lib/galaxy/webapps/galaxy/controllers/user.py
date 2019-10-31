@@ -35,26 +35,122 @@ log = logging.getLogger(__name__)
 class User(BaseUIController, UsesFormDefinitionsMixin, CreatesApiKeysMixin):
     installed_len_files = None
 
-    def __init__(self, app):
-        super(User, self).__init__(app)
-        self.user_manager = users.UserManager(app)
+    @web.expose
+    def openid_auth( self, trans, **kwd ):
+        '''Handles user request to access an OpenID provider'''
+        if not trans.app.config.enable_openid:
+            return trans.show_error_message( 'OpenID authentication is not enabled in this instance of Galaxy' )
+        message = 'Unspecified failure authenticating via OpenID'
+        auto_associate = util.string_as_bool( kwd.get( 'auto_associate', False ) )
+        use_panels = util.string_as_bool( kwd.get( 'use_panels', False ) )
+        consumer = trans.app.openid_manager.get_consumer( trans )
+        openid_url = kwd.get('openid_url', '')
+        openid_provider = kwd.get('openid_provider', '')
+        if openid_url:
+            openid_provider_obj = trans.app.openid_providers.new_provider_from_identifier( openid_url )
+        elif openid_provider:
+            openid_provider_obj = trans.app.openid_providers.get(openid_provider)
+        else:
+            message = 'An OpenID provider was not specified'
+        redirect = kwd.get('redirect', '').strip()
+        if not redirect:
+            redirect = ' '
+        if openid_provider_obj:
+            process_url = trans.request.base.rstrip( '/' ) + url_for( controller='user', action='openid_process', redirect=redirect, openid_provider=openid_provider, auto_associate=auto_associate )  # None of these values can be empty, or else a verification error will occur
+            request = None
+            try:
+                request = consumer.begin( openid_provider_obj.op_endpoint_url )
+                if request is None:
+                    message = 'No OpenID services are available at %s' % openid_provider_obj.op_endpoint_url
+            except Exception as e:
+                message = 'Failed to begin OpenID authentication: %s' % str( e )
+            if request is not None:
+                trans.app.openid_manager.add_sreg( trans, request, required=openid_provider_obj.sreg_required, optional=openid_provider_obj.sreg_optional )
+                if request.shouldSendRedirect():
+                    redirect_url = request.redirectURL(
+                        trans.request.base, process_url )
+                    trans.app.openid_manager.persist_session( trans, consumer )
+                    return trans.response.send_redirect( redirect_url )
+                else:
+                    form = request.htmlMarkup( trans.request.base, process_url, form_tag_attrs={'id': 'openid_message', 'target': '_top'} )
+                    trans.app.openid_manager.persist_session( trans, consumer )
+                    return form
+        return trans.response.send_redirect( url_for(controller='user',
+                                                     action='login',
+                                                     redirect=redirect,
+                                                     use_panels=use_panels,
+                                                     message=message,
+                                                     status='error') )
 
-    def __handle_role_and_group_auto_creation(self, trans, user, roles, auto_create_roles=False,
-                                              auto_create_groups=False, auto_assign_roles_to_groups_only=False):
-        for role_name in roles:
-            role = None
-            group = None
-            if auto_create_roles:
-                try:
-                    # first try to find the role
-                    role = trans.app.security_agent.get_role(role_name)
-                except NoResultFound:
-                    # or create it
-                    role, num_in_groups = trans.app.security_agent.create_role(
-                        role_name, "Auto created upon user registration", [], [],
-                        create_group_for_role=auto_create_groups)
-                    if auto_create_groups:
-                        trans.log_event("Created role and group for auto-registered user.")
+    @web.expose
+    def openid_process( self, trans, **kwd ):
+        '''Handle's response from OpenID Providers'''
+        if not trans.app.config.enable_openid:
+            return trans.show_error_message( 'OpenID authentication is not enabled in this instance of Galaxy' )
+        auto_associate = util.string_as_bool( kwd.get( 'auto_associate', False ) )
+        action = 'login'
+        if trans.user:
+            action = 'openid_manage'
+        if trans.app.config.support_url is not None:
+            contact = '<a href="%s">support</a>' % trans.app.config.support_url
+        else:
+            contact = 'support'
+        message = 'Verification failed for an unknown reason.  Please contact %s for assistance.' % ( contact )
+        status = 'error'
+        consumer = trans.app.openid_manager.get_consumer( trans )
+        info = consumer.complete( kwd, trans.request.url )
+        display_identifier = info.getDisplayIdentifier()
+        redirect = kwd.get( 'redirect', '' ).strip()
+        openid_provider = kwd.get( 'openid_provider', None )
+        if info.status == trans.app.openid_manager.FAILURE and display_identifier:
+            message = "Login via OpenID failed.  The technical reason for this follows, please include this message in your email if you need to %s to resolve this problem: %s" % ( contact, info.message )
+            return trans.response.send_redirect( url_for( controller='user',
+                                                          action=action,
+                                                          use_panels=True,
+                                                          redirect=redirect,
+                                                          message=message,
+                                                          status='error' ) )
+        elif info.status == trans.app.openid_manager.SUCCESS:
+            if info.endpoint.canonicalID:
+                display_identifier = info.endpoint.canonicalID
+            openid_provider_obj = trans.app.openid_providers.get( openid_provider )
+            user_openid = trans.sa_session.query( trans.app.model.UserOpenID ).filter( trans.app.model.UserOpenID.table.c.openid == display_identifier ).first()
+            if not openid_provider_obj and user_openid and user_openid.provider:
+                openid_provider_obj = trans.app.openid_providers.get( user_openid.provider )
+            if not openid_provider_obj:
+                openid_provider_obj = trans.app.openid_providers.new_provider_from_identifier( display_identifier )
+            if not user_openid:
+                user_openid = trans.app.model.UserOpenID( session=trans.galaxy_session, openid=display_identifier )
+            if not user_openid.user:
+                user_openid.session = trans.galaxy_session
+            if not user_openid.provider and openid_provider:
+                user_openid.provider = openid_provider
+            if trans.user:
+                if user_openid.user and user_openid.user.id != trans.user.id:
+                    message = "The OpenID <strong>%s</strong> is already associated with another Galaxy account, <strong>%s</strong>.  Please disassociate it from that account before attempting to associate it with a new account." % ( escape( display_identifier ), escape( user_openid.user.email ) )
+                if not trans.user.active and trans.app.config.user_activation_on:  # Account activation is ON and the user is INACTIVE.
+                    if ( trans.app.config.activation_grace_period != 0 ):  # grace period is ON
+                        if self.is_outside_grace_period( trans, trans.user.create_time ):  # User is outside the grace period. Login is disabled and he will have the activation email resent.
+                            message, status = self.resend_verification_email( trans, trans.user.email, trans.user.username )
+                        else:  # User is within the grace period, let him log in.
+                            pass
+                    else:  # Grace period is off. Login is disabled and user will have the activation email resent.
+                        message, status = self.resend_verification_email( trans, trans.user.email, trans.user.username )
+                elif not user_openid.user or user_openid.user == trans.user:
+                    if openid_provider_obj.id:
+                        user_openid.provider = openid_provider_obj.id
+                    user_openid.session = trans.galaxy_session
+                    if not openid_provider_obj.never_associate_with_user:
+                        if not auto_associate and ( user_openid.user and user_openid.user.id == trans.user.id ):
+                            message = "The OpenID <strong>%s</strong> is already associated with your Galaxy account, <strong>%s</strong>." % ( escape( display_identifier ), escape( trans.user.email ) )
+                            status = "warning"
+                        else:
+                            message = "The OpenID <strong>%s</strong> has been associated with your Galaxy account, <strong>%s</strong>." % ( escape( display_identifier ), escape( trans.user.email ) )
+                            status = "done"
+                        user_openid.user = trans.user
+                        trans.sa_session.add( user_openid )
+                        trans.sa_session.flush()
+                        trans.log_event( "User associated OpenID: %s" % display_identifier )
                     else:
                         trans.log_event("Created role for auto-registered user.")
             if auto_create_groups:

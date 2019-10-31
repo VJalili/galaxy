@@ -349,19 +349,20 @@ class Configuration(object):
                 with open(self.blacklist_file) as blacklist:
                     self.blacklist_content = [line.rstrip() for line in blacklist.readlines()]
             except IOError:
-                log.error("CONFIGURATION ERROR: Can't open supplied blacklist file from path: " + str(self.blacklist_file))
-        self.smtp_server = kwargs.get('smtp_server', None)
-        self.smtp_username = kwargs.get('smtp_username', None)
-        self.smtp_password = kwargs.get('smtp_password', None)
-        self.smtp_ssl = kwargs.get('smtp_ssl', None)
-        self.track_jobs_in_database = string_as_bool(kwargs.get('track_jobs_in_database', 'True'))
-        self.expose_dataset_path = string_as_bool(kwargs.get('expose_dataset_path', 'False'))
-        self.expose_potentially_sensitive_job_metrics = string_as_bool(kwargs.get('expose_potentially_sensitive_job_metrics', 'False'))
-        self.enable_communication_server = string_as_bool(kwargs.get('enable_communication_server', 'False'))
-        self.communication_server_host = kwargs.get('communication_server_host', 'http://localhost')
-        self.communication_server_port = int(kwargs.get('communication_server_port', '7070'))
-        self.persistent_communication_rooms = listify(kwargs.get("persistent_communication_rooms", []), do_strip=True)
-        self.enable_quotas = string_as_bool(kwargs.get('enable_quotas', 'False'))
+                log.error( "CONFIGURATION ERROR: Can't open supplied blacklist file from path: " + str( self.blacklist_file ) )
+        self.smtp_server = kwargs.get( 'smtp_server', None )
+        self.smtp_username = kwargs.get( 'smtp_username', None )
+        self.smtp_password = kwargs.get( 'smtp_password', None )
+        self.smtp_ssl = kwargs.get( 'smtp_ssl', None )
+        self.track_jobs_in_database = string_as_bool( kwargs.get( 'track_jobs_in_database', 'True') )
+        self.start_job_runners = listify(kwargs.get( 'start_job_runners', '' ))
+        self.expose_dataset_path = string_as_bool( kwargs.get( 'expose_dataset_path', 'False' ) )
+        self.enable_communication_server = string_as_bool( kwargs.get( 'enable_communication_server', 'False' ) )
+        self.communication_server_host = kwargs.get( 'communication_server_host', 'http://localhost' )
+        self.communication_server_port = int( kwargs.get( 'communication_server_port', '7070' ) )
+        self.persistent_communication_rooms = listify( kwargs.get( "persistent_communication_rooms", [] ), do_strip=True )
+        # External Service types used in sample tracking
+        self.external_service_type_path = resolve_path( kwargs.get( 'external_service_type_path', 'external_service_types' ), self.root )
         # Tasked job runner.
         self.use_tasked_jobs = string_as_bool(kwargs.get('use_tasked_jobs', False))
         self.local_task_queue_workers = int(kwargs.get("local_task_queue_workers", 2))
@@ -700,65 +701,6 @@ class Configuration(object):
         self.citation_cache_data_dir = self.resolve_path(kwargs.get("citation_cache_data_dir", "database/citations/data"))
         self.citation_cache_lock_dir = self.resolve_path(kwargs.get("citation_cache_lock_dir", "database/citations/locks"))
 
-        self.containers_conf = parse_containers_config(self.containers_config_file)
-
-        # Compliance/Policy variables
-        self.redact_username_during_deletion = False
-        self.redact_email_during_deletion = False
-        self.redact_ip_address = False
-        self.redact_username_in_logs = False
-        self.redact_email_in_job_name = False
-        self.redact_user_details_in_bugreport = False
-        self.redact_user_address_during_deletion = False
-        # GDPR compliance mode changes values on a number of variables. Other
-        # policies could change (non)overlapping subsets of these variables.
-        self.enable_beta_gdpr = string_as_bool(kwargs.get("enable_beta_gdpr", False))
-        if self.enable_beta_gdpr:
-            self.expose_user_name = False
-            self.expose_user_email = False
-
-            self.redact_username_during_deletion = True
-            self.redact_email_during_deletion = True
-            self.redact_ip_address = True
-            self.redact_username_in_logs = True
-            self.redact_email_in_job_name = True
-            self.redact_user_details_in_bugreport = True
-            self.redact_user_address_during_deletion = True
-            self.allow_user_deletion = True
-
-            LOGGING_CONFIG_DEFAULT['formatters']['brief'] = {
-                'format': '%(asctime)s %(levelname)-8s %(name)-15s %(message)s'
-            }
-            LOGGING_CONFIG_DEFAULT['handlers']['compliance_log'] = {
-                'class': 'logging.handlers.RotatingFileHandler',
-                'formatter': 'brief',
-                'filename': 'compliance.log',
-                'backupCount': 0,
-            }
-            LOGGING_CONFIG_DEFAULT['loggers']['COMPLIANCE'] = {
-                'handlers': ['compliance_log'],
-                'level': 'DEBUG',
-                'qualname': 'COMPLIANCE'
-            }
-
-        log_destination = kwargs.get("log_destination", None)
-        if log_destination == "stdout":
-            LOGGING_CONFIG_DEFAULT['handlers']['console'] = {
-                'class': 'logging.StreamHandler',
-                'formatter': 'stack',
-                'level': 'DEBUG',
-                'stream': 'ext://sys.stdout',
-                'filters': ['stack']
-            }
-        elif log_destination:
-            LOGGING_CONFIG_DEFAULT['handlers']['console'] = {
-                'class': 'logging.FileHandler',
-                'formatter': 'stack',
-                'level': 'DEBUG',
-                'filename': kwargs['log_destination'],
-                'filters': ['stack']
-            }
-
     @property
     def sentry_dsn_public(self):
         """
@@ -785,6 +727,25 @@ class Configuration(object):
         """
         Backwards compatibility for config files moved to the config/ dir.
         """
+        defaults = dict(
+            auth_config_file=[ 'config/auth_conf.xml', 'config/auth_conf.xml.sample' ],
+            data_manager_config_file=[ 'config/data_manager_conf.xml', 'data_manager_conf.xml', 'config/data_manager_conf.xml.sample' ],
+            datatypes_config_file=[ 'config/datatypes_conf.xml', 'datatypes_conf.xml', 'config/datatypes_conf.xml.sample' ],
+            external_service_type_config_file=[ 'config/external_service_types_conf.xml', 'external_service_types_conf.xml', 'config/external_service_types_conf.xml.sample' ],
+            job_config_file=[ 'config/job_conf.xml', 'job_conf.xml' ],
+            tool_destinations_config_file=[ 'config/tool_destinations.yml', 'config/tool_destinations.yml.sample' ],
+            job_metrics_config_file=[ 'config/job_metrics_conf.xml', 'job_metrics_conf.xml', 'config/job_metrics_conf.xml.sample' ],
+            dependency_resolvers_config_file=[ 'config/dependency_resolvers_conf.xml', 'dependency_resolvers_conf.xml' ],
+            job_resource_params_file=[ 'config/job_resource_params_conf.xml', 'job_resource_params_conf.xml' ],
+            migrated_tools_config=[ 'migrated_tools_conf.xml', 'config/migrated_tools_conf.xml' ],
+            object_store_config_file=[ 'config/object_store_conf.xml', 'object_store_conf.xml' ],
+            openid_config_file=[ 'config/openid_conf.xml', 'openid_conf.xml', 'config/openid_conf.xml.sample' ],
+            oidc_idp_config_file=['config/oidc_idp_conf.py', 'config/oidc_idp_conf.py.sample'],
+            shed_data_manager_config_file=[ 'shed_data_manager_conf.xml', 'config/shed_data_manager_conf.xml' ],
+            shed_tool_data_table_config=[ 'shed_tool_data_table_conf.xml', 'config/shed_tool_data_table_conf.xml' ],
+            tool_sheds_config_file=[ 'config/tool_sheds_conf.xml', 'tool_sheds_conf.xml', 'config/tool_sheds_conf.xml.sample' ],
+            workflow_schedulers_config_file=['config/workflow_schedulers_conf.xml', 'config/workflow_schedulers_conf.xml.sample'],
+        )
 
         for var in PATH_DEFAULTS:
             setattr(self, var, find_path(kwargs, var, self.root))
