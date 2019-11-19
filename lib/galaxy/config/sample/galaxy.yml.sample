@@ -582,6 +582,9 @@ galaxy:
   # more de-centralized usage.
   #object_store_store_by: id
 
+  # Enables and disables the user-based object store feature.
+  #enable_user_based_object_store: false
+
   # Sets a base default jobs working directory for all users storage
   # media, where each storage media will have a sperate folder under
   # this path named with the media's encoded ID. This attribute is set

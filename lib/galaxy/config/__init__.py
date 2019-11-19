@@ -452,6 +452,8 @@ class GalaxyAppConfiguration(BaseAppConfiguration):
         self.object_store_cache_path = self.resolve_path(kwargs.get("object_store_cache_path", os.path.join(self.data_dir, "object_store_cache")))
 
         # Configuration options for new storage media uses can plug-in.
+        self.enable_user_based_object_store = kwargs.get(
+            "enable_user_based_object_store", False)
         self.default_storage_media_jobs_directory = kwargs.get(
             "default_storage_media_jobs_directory",
             "database/job_working_directory_storage_media")
