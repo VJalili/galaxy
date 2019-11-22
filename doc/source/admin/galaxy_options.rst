@@ -29,10 +29,8 @@
 
 :Description:
     By default, Galaxy uses a SQLite database at
-    'database/universe.sqlite'.  You may use a SQLAlchemy connection
-    string to specify an external database instead.  This string takes
-    many options which are explained in detail in the config file
-    documentation.
+    '<data_dir>/universe.sqlite'.  You may use a SQLAlchemy connection
+    string to specify an external database instead.
     Sample default
     'sqlite:///<data_dir>/universe.sqlite?isolation_level=IMMEDIATE'
 :Default: ``None``
@@ -210,8 +208,6 @@
     Where dataset files are stored. It must be accessible at the same
     path on any cluster nodes that will run Galaxy jobs, unless using
     Pulsar.
-    Default value will be resolved to 'database/files' where
-    'database' is the default value of the 'data_dir' option).
 :Default: ``files``
 :Type: str
 
@@ -224,8 +220,6 @@
     Where temporary files are stored. It must be accessible at the
     same path on any cluster nodes that will run Galaxy jobs, unless
     using Pulsar.
-    Default value will be resolved to 'database/tmp' where 'database'
-    is the default value of the 'data_dir' option).
 :Default: ``tmp``
 :Type: str
 
@@ -259,7 +253,9 @@
     this option is preferable. This file will be created automatically
     upon tool installation, whereas Galaxy will fail to start if any
     files in tool_config_file cannot be read.
-:Default: ``config/shed_tool_conf.xml``
+    The value of this option will be resolved with respect to
+    <mutable_config_dir>.
+:Default: ``shed_tool_conf.xml``
 :Type: str
 
 
@@ -288,8 +284,8 @@
     migration scripts to install tools that have been migrated to the
     tool shed upon a new release, they will be added to this tool
     config file.
-    Default value will be resolved to 'config/migrated_tools_conf.xml'
-    where 'config' is the default value of the 'config_dir' option).
+    The value of this option will be resolved with respect to
+    <config_dir>.
 :Default: ``migrated_tools_conf.xml``
 :Type: str
 
@@ -333,8 +329,8 @@
     handling. If this option is set to none or an invalid path,
     installing tools with dependencies from the Tool Shed or in Conda
     will fail.
-    Default value will be resolved to 'database/dependencies' where
-    'database' is the default value of the 'data_dir' option).
+    The value of this option will be resolved with respect to
+    <data_dir>.
 :Default: ``dependencies``
 :Type: str
 
@@ -351,7 +347,9 @@
     then use Conda if available. See
     https://github.com/galaxyproject/galaxy/blob/dev/doc/source/admin/dependency_resolvers.rst
     for more information on these options.
-:Default: ``config/dependency_resolvers_conf.xml``
+    The value of this option will be resolved with respect to
+    <config_dir>.
+:Default: ``dependency_resolvers_conf.xml``
 :Type: str
 
 
@@ -500,7 +498,9 @@
     File containing the Galaxy Tool Sheds that should be made
     available to install from in the admin interface (.sample used if
     default does not exist).
-:Default: ``config/tool_sheds_conf.xml``
+    The value of this option will be resolved with respect to
+    <config_dir>.
+:Default: ``tool_sheds_conf.xml``
 :Type: str
 
 
@@ -607,8 +607,9 @@
     the Galaxy host. This is ignored if the relevant container
     resolver isn't enabled, and will install on demand unless
     involucro_auto_init is set to false.
-    Sample default '<tool_dependency_dir>/involucro'
-:Default: ``None``
+    The value of this option will be resolved with respect to
+    <tool_dependency_dir>.
+:Default: ``involucro``
 :Type: str
 
 
@@ -700,7 +701,9 @@
     installation, these entries are automatically added to the
     following file, which is parsed and applied to the
     ToolDataTableManager at server start up.
-:Default: ``config/shed_tool_data_table_conf.xml``
+    The value of this option will be resolved with respect to
+    <mutable_config_dir>.
+:Default: ``shed_tool_data_table_conf.xml``
 :Type: str
 
 
@@ -751,8 +754,9 @@
 ~~~~~~~~~~~~~~~~~~~~
 
 :Description:
-    File containing old-style genome builds. Value will be resolved
-    with respect to <tool_data_path>.
+    File containing old-style genome builds.
+    The value of this option will be resolved with respect to
+    <tool_data_path>.
 :Default: ``shared/ucsc/builds.txt``
 :Type: str
 
@@ -763,7 +767,8 @@
 
 :Description:
     Directory where chrom len files are kept, currently mainly used by
-    trackster. Value will be resolved with respect to
+    trackster.
+    The value of this option will be resolved with respect to
     <tool_data_path>.
 :Default: ``shared/ucsc/chrom``
 :Type: str
@@ -844,7 +849,7 @@
     definition files. Galaxy ships with several basic interface tours
     enabled, though a different directory with custom tours can be
     specified here. The path is relative to the Galaxy root dir.  To
-    use an absolute path begin the path with '/'.  This is a comma
+    use an absolute path begin the path with '/'.  This is a comma-
     separated list.
 :Default: ``config/plugins/tours``
 :Type: str
@@ -858,7 +863,7 @@
     Webhooks directory: where to store webhooks - plugins to extend
     the Galaxy UI. By default none will be loaded.  Set to
     config/plugins/webhooks/demo to load Galaxy's demo webhooks.  To
-    use an absolute path begin the path with '/'.  This is a comma
+    use an absolute path begin the path with '/'.  This is a comma-
     separated list. Add test/functional/webhooks to this list to
     include the demo webhooks used to test the webhook framework.
 :Default: ``config/plugins/webhooks``
@@ -873,8 +878,8 @@
     Each job is given a unique empty directory as its current working
     directory. This option defines in what parent directory those
     directories will be created.
-    Default value will be resolved to 'database/jobs_directory' where
-    'database' is the default value of the 'data_dir' option).
+    The value of this option will be resolved with respect to
+    <data_dir>.
 :Default: ``jobs_directory``
 :Type: str
 
@@ -886,7 +891,6 @@
 :Description:
     If using a cluster, Galaxy will write job scripts and
     stdout/stderr to this directory.
-    Value will be resolved with respect to <data_dir>.
 :Default: ``pbs``
 :Type: str
 
@@ -898,8 +902,6 @@
 :Description:
     Mako templates are compiled as needed and cached for reuse, this
     directory is used for the cache
-    Default value will be resolved to 'database/compiled_templates'
-    where 'database' is the default value of the 'data_dir' option).
 :Default: ``compiled_templates``
 :Type: str
 
@@ -975,8 +977,6 @@
     fetched from external sources such as https://doi.org/ by Galaxy -
     the following parameters can be used to control the caching used
     to store this information.
-    Default value will be resolved to 'database/citations/data' where
-    'database' is the default value of the 'data_dir' option).
 :Default: ``citations/data``
 :Type: str
 
@@ -990,8 +990,6 @@
     fetched from external sources such as https://doi.org/ by Galaxy -
     the following parameters can be used to control the caching used
     to store this information.
-    Default value will be resolved to 'database/citations/locks' where
-    'database' is the default value of the 'data_dir' option).
 :Default: ``citations/locks``
 :Type: str
 
@@ -1003,7 +1001,9 @@
 :Description:
     Configuration file for the object store If this is set and exists,
     it overrides any other objectstore settings.
-:Default: ``config/object_store_conf.xml``
+    The value of this option will be resolved with respect to
+    <config_dir>.
+:Default: ``object_store_conf.xml``
 :Type: str
 
 
@@ -1388,7 +1388,7 @@
     Format string used when showing date and time information. The
     string may contain: - the directives used by Python
     time.strftime() function (see
-    https://docs.python.org/library/time.html#time.strftime ), -
+    https://docs.python.org/library/time.html#time.strftime), -
     $locale (complete format string for the server locale), - $iso8601
     (complete format string as specified by ISO 8601 international
     standard).
@@ -1403,7 +1403,9 @@
 :Description:
     Location of the configuration file containing extra user
     preferences.
-:Default: ``config/user_preferences_extra_conf.yml``
+    The value of this option will be resolved with respect to
+    <config_dir>.
+:Default: ``user_preferences_extra_conf.yml``
 :Type: str
 
 
@@ -1852,8 +1854,6 @@
 :Description:
     The NodeJS dynamic proxy can use an SQLite database or a JSON file
     for IPC, set that here.
-    Default value will be resolved to 'database/session_map.sqlite'
-    where 'database' is the default value of the 'data_dir' option).
 :Default: ``session_map.sqlite``
 :Type: str
 
@@ -2158,8 +2158,8 @@
 
 :Description:
     Debug enables access to various config options useful for
-    development and debugging: use_lint, use_profile, use_printdebug
-    and use_interactive.  It also causes the files used by PBS/SGE
+    development and debugging: use_lint, use_profile, and
+    use_printdebug.  It also causes the files used by PBS/SGE
     (submission script, output, and error) to remain on disk after the
     job is complete.
 :Default: ``false``
@@ -2193,17 +2193,6 @@
 :Description:
     Intercept print statements and show them on the returned page.
 :Default: ``true``
-:Type: bool
-
-
-~~~~~~~~~~~~~~~~~~~
-``use_interactive``
-~~~~~~~~~~~~~~~~~~~
-
-:Description:
-    Enable live debugging in your browser.  This should NEVER be
-    enabled on a public site.
-:Default: ``false``
 :Type: bool
 
 
@@ -2905,8 +2894,8 @@
 :Description:
     Enable beta workflow modules that should not yet be considered
     part of Galaxy's stable API. (The module state definitions may
-    change and workflows built using  these modules may not function
-    in the future.)
+    change and workflows built using these modules may not function in
+    the future.)
 :Default: ``false``
 :Type: bool
 
@@ -3035,7 +3024,9 @@
 
 :Description:
     Sets the path to OIDC configuration file.
-:Default: ``config/oidc_config.xml``
+    The value of this option will be resolved with respect to
+    <config_dir>.
+:Default: ``oidc_config.xml``
 :Type: str
 
 
@@ -3045,7 +3036,9 @@
 
 :Description:
     Sets the path to OIDC backends configuration file.
-:Default: ``config/oidc_backends_config.xml``
+    The value of this option will be resolved with respect to
+    <config_dir>.
+:Default: ``oidc_backends_config.xml``
 :Type: str
 
 
@@ -3057,7 +3050,9 @@
     XML config file that allows the use of different authentication
     providers (e.g. LDAP) instead or in addition to local
     authentication (.sample is used if default does not exist).
-:Default: ``config/auth_conf.xml``
+    The value of this option will be resolved with respect to
+    <config_dir>.
+:Default: ``auth_conf.xml``
 :Type: str
 
 
@@ -3101,8 +3096,6 @@
 
 :Description:
     If OpenID is enabled, consumer cache directory to use.
-    Default value will be resolved to 'database/openid_consumer_cache'
-    where 'database' is the default value of the 'data_dir' option).
 :Default: ``openid_consumer_cache``
 :Type: str
 
@@ -3278,8 +3271,11 @@
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 :Description:
-    File where Tool Shed based Data Managers are configured.
-:Default: ``config/shed_data_manager_conf.xml``
+    File where Tool Shed based Data Managers are configured. This file
+    will be created automatically upon data manager installation.
+    The value of this option will be resolved with respect to
+    <mutable_config_dir>.
+:Default: ``shed_data_manager_conf.xml``
 :Type: str
 
 
@@ -3525,9 +3521,9 @@
 
 :Description:
     When running DRMAA jobs as the Galaxy user
-    (https://docs.galaxyproject.org/en/master/admin/cluster.html
-    #submitting-jobs-as-the-real-user) this script is used to run the
-    job script Galaxy generates for a tool execution.
+    (https://docs.galaxyproject.org/en/master/admin/cluster.html#submitting-
+    jobs-as-the-real-user) this script is used to run the job script
+    Galaxy generates for a tool execution.
     Example value 'sudo -E scripts/drmaa_external_runner.py
     --assign_all_groups'
 :Default: ``None``
@@ -3540,9 +3536,9 @@
 
 :Description:
     When running DRMAA jobs as the Galaxy user
-    (https://docs.galaxyproject.org/en/master/admin/cluster.html
-    #submitting-jobs-as-the-real-user) this script is used to kill
-    such jobs by Galaxy (e.g. if the user cancels the job).
+    (https://docs.galaxyproject.org/en/master/admin/cluster.html#submitting-
+    jobs-as-the-real-user) this script is used to kill such jobs by
+    Galaxy (e.g. if the user cancels the job).
     Example value 'sudo -E scripts/drmaa_external_killer.py'
 :Default: ``None``
 :Type: str
@@ -3554,10 +3550,10 @@
 
 :Description:
     When running DRMAA jobs as the Galaxy user
-    (https://docs.galaxyproject.org/en/master/admin/cluster.html
-    #submitting-jobs-as-the-real-user) this script is used transfer
-    permissions back and forth between the Galaxy user and the user
-    that is running the job.
+    (https://docs.galaxyproject.org/en/master/admin/cluster.html#submitting-
+    jobs-as-the-real-user) this script is used transfer permissions
+    back and forth between the Galaxy user and the user that is
+    running the job.
     Example value 'sudo -E scripts/external_chown_script.py'
 :Default: ``None``
 :Type: str
@@ -3569,14 +3565,14 @@
 
 :Description:
     When running DRMAA jobs as the Galaxy user
-    (https://docs.galaxyproject.org/en/master/admin/cluster.html
-    #submitting-jobs-as-the-real-user) Galaxy can extract the user
-    name from the email address (actually the local-part before the @)
-    or the username which are both stored in the Galaxy data base. The
-    latter option is particularly useful for installations that get
-    the authentication from LDAP. Also, Galaxy can accept the name of
-    a common system user (eg. galaxy_worker) who can run every job
-    being submitted. This user should not be the same user running the
+    (https://docs.galaxyproject.org/en/master/admin/cluster.html#submitting-
+    jobs-as-the-real-user) Galaxy can extract the user name from the
+    email address (actually the local-part before the @) or the
+    username which are both stored in the Galaxy data base. The latter
+    option is particularly useful for installations that get the
+    authentication from LDAP. Also, Galaxy can accept the name of a
+    common system user (eg. galaxy_worker) who can run every job being
+    submitted. This user should not be the same user running the
     galaxy system. Possible values are user_email (default), username
     or <common_system_user>
 :Default: ``user_email``
@@ -3611,7 +3607,9 @@
     definition. These fields will be presented to users in the tool
     forms and allow them to overwrite default job resources such as
     number of processors, memory and walltime.
-:Default: ``config/job_resource_params_conf.xml``
+    The value of this option will be resolved with respect to
+    <config_dir>.
+:Default: ``job_resource_params_conf.xml``
 :Type: str
 
 
@@ -3625,7 +3623,9 @@
     requires both a description of the fields available (which
     defaults to the definitions in job_resource_params_file if not
     set).
-:Default: ``config/workflow_resource_params_conf.xml``
+    The value of this option will be resolved with respect to
+    <config_dir>.
+:Default: ``workflow_resource_params_conf.xml``
 :Type: str
 
 
@@ -3654,7 +3654,9 @@
 :Description:
     Optional configuration file similar to `job_config_file` to
     specify which Galaxy processes should schedule workflows.
-:Default: ``config/workflow_schedulers_conf.xml``
+    The value of this option will be resolved with respect to
+    <config_dir>.
+:Default: ``workflow_schedulers_conf.xml``
 :Type: str
 
 
@@ -3831,6 +3833,20 @@
     reason to disable it.
 :Default: ``true``
 :Type: bool
+
+
+~~~~~~~~~~~~~~~~~
+``cookie_domain``
+~~~~~~~~~~~~~~~~~
+
+:Description:
+    Tell Galaxy that multiple domains sharing the same root are
+    associated to this instance and wants to share the same session
+    cookie. This allow a user to stay logged in when passing from one
+    subdomain to the other. This root domain will be written in the
+    unique session cookie shared by all subdomains.
+:Default: ``None``
+:Type: str
 
 
 
