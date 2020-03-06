@@ -649,19 +649,6 @@ class FTPFileToolParameter(ToolParameter):
         return d
 
 
-class GenomespaceFileToolParameter(ToolParameter):
-    """
-    Parameter that takes one of two values.
-    """
-
-    def __init__(self, tool, input_source):
-        super(GenomespaceFileToolParameter, self).__init__(tool, input_source)
-        self.value = input_source.get('value')
-
-    def get_initial_value(self, trans, other_values):
-        return self.value
-
-
 class HiddenToolParameter(ToolParameter):
     """
     Parameter that takes one of two values.
@@ -898,12 +885,14 @@ class SelectToolParameter(ToolParameter):
                         return []
                     else:
                         raise ValueError("parameter '%s': no option was selected for non optional parameter" % (self.name))
+            if is_runtime_value(value):
+                return None
             if value not in legal_values and require_legal_value:
                 raise ValueError("parameter '%s': an invalid option (%r) was selected (valid options: %s)" % (self.name, value, ",".join(legal_values)))
             return value
 
     def to_param_dict_string(self, value, other_values={}):
-        if value is None:
+        if value in (None, []):
             return "None"
         if isinstance(value, list):
             if not self.multiple:
@@ -948,7 +937,7 @@ class SelectToolParameter(ToolParameter):
         # FIXME: Currently only translating values back to labels if they
         #        are not dynamic
         if self.is_dynamic:
-            rval = map(str, value)
+            rval = [str(_) for _ in value]
         else:
             options = list(self.static_options)
             rval = []
@@ -1844,7 +1833,7 @@ class DataToolParameter(BaseDataToolParameter):
             value = [value]
         if value:
             try:
-                return ", ".join(["%s: %s" % (item.hid, item.name) for item in value])
+                return ", ".join("%s: %s" % (item.hid, item.name) for item in value)
             except Exception:
                 pass
         return "No dataset."
@@ -1925,7 +1914,7 @@ class DataToolParameter(BaseDataToolParameter):
             ref = getattr(ref, attribute)
         if call_attribute:
             ref = ref()
-        return ref
+        return str(ref)
 
     def to_dict(self, trans, other_values={}):
         # create dictionary and fill default parameters
@@ -1959,7 +1948,7 @@ class DataToolParameter(BaseDataToolParameter):
         def append(list, hda, name, src, keep=False, subcollection_type=None):
             value = {
                 'id'   : trans.security.encode_id(hda.id),
-                'hid'  : hda.hid,
+                'hid'  : hda.hid if hda.hid is not None else -1,
                 'name' : name,
                 'tags' : [t.user_tname if not t.value else "%s:%s" % (t.user_tname, t.value) for t in hda.tags],
                 'src'  : src,
@@ -2350,7 +2339,6 @@ parameter_types = dict(
     baseurl=BaseURLToolParameter,
     file=FileToolParameter,
     ftpfile=FTPFileToolParameter,
-    genomespacefile=GenomespaceFileToolParameter,
     data=DataToolParameter,
     data_collection=DataCollectionToolParameter,
     library_data=LibraryDatasetToolParameter,

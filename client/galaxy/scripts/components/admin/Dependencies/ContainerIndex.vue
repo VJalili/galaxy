@@ -89,7 +89,7 @@
                 <template v-slot:cell(tool)="row">
                     <tool-display :tool-id="row.item.tool_id" />
                 </template>
-                <template slot="row-details" slot-scope="row">
+                <template v-slot:row-details="row">
                     <container-resolution-details :resolution="row.item" />
                 </template>
             </b-table>
@@ -102,7 +102,7 @@ import Vue from "vue";
 import BootstrapVue from "bootstrap-vue";
 import DependencyIndexMixin from "./DependencyIndexMixin";
 import ContainerResolutionDetails from "./ContainerResolutionDetails";
-import { getContainerResolutionToolbox, resolveContainersWithInstall } from "../AdminServices.js";
+import { getContainerResolutionToolbox, resolveContainersWithInstall } from "../AdminServices";
 import { DESCRIPTION } from "./ContainerResolver";
 
 Vue.use(BootstrapVue);

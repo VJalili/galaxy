@@ -43,7 +43,7 @@ from galaxy.webapps.base.controller import (
 )
 from galaxy.workflow.extract import extract_workflow
 from galaxy.workflow.modules import module_factory
-from galaxy.workflow.reports import generate_report_json
+from galaxy.workflow.reports import generate_report
 from galaxy.workflow.run import invoke, queue_invoke
 from galaxy.workflow.run_request import build_workflow_run_configs
 
@@ -196,7 +196,7 @@ class WorkflowsAPIController(BaseAPIController, UsesStoredWorkflowMixin, UsesAnn
                 for tool_id in workflow['missing_tools']:
                     toolshed, _, owner, name, tool, version = tool_id.split('/')
                     shed_url = self.__get_full_shed_url(toolshed)
-                    repo_identifier = '/'.join([toolshed, owner, name])
+                    repo_identifier = '/'.join((toolshed, owner, name))
                     if repo_identifier not in workflows_by_toolshed:
                         workflows_by_toolshed[repo_identifier] = dict(shed=shed_url.rstrip('/'), repository=name, owner=owner, tools=[tool_id], workflows=[workflow['name']])
                     else:
@@ -266,7 +266,7 @@ class WorkflowsAPIController(BaseAPIController, UsesStoredWorkflowMixin, UsesAnn
         :param  workflow_id:                 An existing workflow id. Either workflow_id, installed_repository_file or from_history_id must be specified
         :type   workflow_id:                 str
 
-        :param  parameters:                  If workflow_id is set - see _update_step_parameters()
+        :param  parameters:                  If workflow_id is set - see _step_parameters() in lib/galaxy/workflow/run_request.py
         :type   parameters:                  dict
 
         :param  ds_map:                      If workflow_id is set - a dictionary mapping each input step id to a dictionary with 2 keys: 'src' (which can be 'ldda', 'ld' or 'hda') and 'id' (which should be the id of a LibraryDatasetDatasetAssociation, LibraryDataset or HistoryDatasetAssociation respectively)
@@ -302,7 +302,7 @@ class WorkflowsAPIController(BaseAPIController, UsesStoredWorkflowMixin, UsesAnn
         :param use_cached_job:               If set to True galaxy will attempt to find previously executed steps for all workflow steps with the exact same parameter combinations
                                              and will copy the outputs of the previously executed step.
         """
-        ways_to_create = set([
+        ways_to_create = {
             'archive_source',
             'workflow_id',
             'installed_repository_file',
@@ -310,7 +310,7 @@ class WorkflowsAPIController(BaseAPIController, UsesStoredWorkflowMixin, UsesAnn
             'from_path',
             'shared_workflow_id',
             'workflow',
-        ])
+        }
 
         if len(ways_to_create.intersection(payload)) == 0:
             message = "One parameter among - %s - must be specified" % ", ".join(ways_to_create)
@@ -353,7 +353,7 @@ class WorkflowsAPIController(BaseAPIController, UsesStoredWorkflowMixin, UsesAnn
                 uploaded_file = archive_file.file
                 uploaded_file_name = uploaded_file.name
                 if os.path.getsize(os.path.abspath(uploaded_file_name)) > 0:
-                    archive_data = uploaded_file.read()
+                    archive_data = util.unicodify(uploaded_file.read())
                 else:
                     raise exceptions.MessageException("You attempted to upload an empty file.")
             else:
@@ -551,6 +551,7 @@ class WorkflowsAPIController(BaseAPIController, UsesStoredWorkflowMixin, UsesAnn
                          annotation defaults to existing annotation
             * menu_entry optional boolean marking if the workflow should appear in the user's menu,
                          if not present, workflow menu entries are not modified
+            * from_tool_form True iff encoded state coming in is encoded for the tool form.
 
         :rtype:     dict
         :returns:   serialized version of the workflow
@@ -560,7 +561,7 @@ class WorkflowsAPIController(BaseAPIController, UsesStoredWorkflowMixin, UsesAnn
         if workflow_dict:
             raw_workflow_description = self.__normalize_workflow(trans, workflow_dict)
             workflow_dict = raw_workflow_description.as_dict
-            new_workflow_name = workflow_dict.get('name') or workflow_dict.get('name')
+            new_workflow_name = workflow_dict.get('name')
             if new_workflow_name and new_workflow_name != stored_workflow.name:
                 sanitized_name = sanitize_html(new_workflow_name)
                 workflow = stored_workflow.latest_workflow.copy()
@@ -574,6 +575,7 @@ class WorkflowsAPIController(BaseAPIController, UsesStoredWorkflowMixin, UsesAnn
             if 'annotation' in workflow_dict:
                 newAnnotation = sanitize_html(workflow_dict['annotation'])
                 self.add_item_annotation(trans.sa_session, trans.get_user(), stored_workflow, newAnnotation)
+                trans.sa_session.flush()
 
             if 'menu_entry' in workflow_dict or 'show_in_tool_panel' in workflow_dict:
                 if workflow_dict.get('menu_entry') or workflow_dict.get('show_in_tool_panel'):
@@ -583,7 +585,7 @@ class WorkflowsAPIController(BaseAPIController, UsesStoredWorkflowMixin, UsesAnn
                 else:
                     # remove if in list
                     entries = {x.stored_workflow_id: x for x in trans.get_user().stored_workflow_menu_entries}
-                    if (trans.security.decode_id(id) in entries):
+                    if trans.security.decode_id(id) in entries:
                         trans.get_user().stored_workflow_menu_entries.remove(entries[trans.security.decode_id(id)])
             # set tags
             if 'tags' in workflow_dict:
@@ -613,11 +615,11 @@ class WorkflowsAPIController(BaseAPIController, UsesStoredWorkflowMixin, UsesAnn
         """
         inputs = payload.get('inputs', {})
         trans.workflow_building_mode = workflow_building_modes.ENABLED
-        module = module_factory.from_dict(trans, payload)
+        module = module_factory.from_dict(trans, payload, from_tool_form=True)
         if 'tool_state' not in payload:
             module_state = {}
             populate_state(trans, module.get_inputs(), inputs, module_state, check=False)
-            module.recover_state(module_state)
+            module.recover_state(module_state, from_tool_form=True)
         return {
             'label'             : inputs.get('__label', ''),
             'annotation'        : inputs.get('__annotation', ''),
@@ -719,10 +721,11 @@ class WorkflowsAPIController(BaseAPIController, UsesStoredWorkflowMixin, UsesAnn
         # Fill in missing tool state for hand built so the workflow can run, default of this
         # should become True at some point in the future I imagine.
         fill_defaults = util.string_as_bool(payload.get("fill_defaults", False))
-
+        from_tool_form = payload.get("from_tool_form", False)
         return {
             'exact_tools': exact_tools,
             'fill_defaults': fill_defaults,
+            'from_tool_form': from_tool_form,
         }
 
     def __normalize_workflow(self, trans, as_dict):
@@ -924,15 +927,35 @@ class WorkflowsAPIController(BaseAPIController, UsesStoredWorkflowMixin, UsesAnn
 
         Get JSON summarizing invocation for reporting.
         """
+        kwd["format"] = "json"
+        return self._generate_report(trans, invocation_id, **kwd)
+
+    @expose_api_raw
+    def show_invocation_report_pdf(self, trans, invocation_id, **kwd):
+        """
+        GET /api/workflows/{workflow_id}/invocations/{invocation_id}/report.pdf
+        GET /api/invocations/{invocation_id}/report.pdf
+
+        Get JSON summarizing invocation for reporting.
+        """
+        kwd["format"] = "pdf"
+        trans.response.set_content_type("application/pdf")
+        return self._generate_report(trans, invocation_id, **kwd)
+
+    def _generate_report(self, trans, invocation_id, **kwd):
         decoded_workflow_invocation_id = self.decode_id(invocation_id)
         workflow_invocation = self.workflow_manager.get_invocation(trans, decoded_workflow_invocation_id)
         generator_plugin_type = kwd.get("generator_plugin_type")
         runtime_report_config_json = kwd.get("runtime_report_config_json")
         invocation_markdown = kwd.get("invocation_markdown", None)
+        target_format = kwd.get("format", "json")
         if invocation_markdown:
             runtime_report_config_json = {"markdown": invocation_markdown}
-        return generate_report_json(
-            trans, workflow_invocation, runtime_report_config_json=runtime_report_config_json, plugin_type=generator_plugin_type
+        return generate_report(
+            trans, workflow_invocation,
+            runtime_report_config_json=runtime_report_config_json,
+            plugin_type=generator_plugin_type,
+            target_format=target_format,
         )
 
     @expose_api
