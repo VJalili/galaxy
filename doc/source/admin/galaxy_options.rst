@@ -1124,7 +1124,7 @@
     for each media independency in storage_media table; hence, admins
     may modify records in that table to define user/media-specific
     path.
-:Default: ``database/job_working_directory_storage_media``
+:Default: ``job_working_directory_storage_media``
 :Type: str
 
 
@@ -1138,7 +1138,7 @@
     named with the media's encoded ID. This attribute is set for each
     media independency in storage_media table; hence, admins may
     modify records in that table to define user/media-specific path.
-:Default: ``database/storage_media_cache``
+:Default: ``storage_media_cache``
 :Type: str
 
 
