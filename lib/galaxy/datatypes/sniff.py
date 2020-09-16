@@ -1,8 +1,8 @@
 """
 File format detector
 """
-from __future__ import absolute_import
 
+import bz2
 import codecs
 import gzip
 import io
@@ -12,17 +12,11 @@ import re
 import shutil
 import sys
 import tempfile
+import urllib.request
 import zipfile
 
-from six import StringIO, text_type
-from six.moves import filter
-from six.moves.urllib.request import urlopen
-
 from galaxy import util
-from galaxy.util import (
-    compression_utils,
-    smart_str
-)
+from galaxy.util import compression_utils
 from galaxy.util.checkers import (
     check_binary,
     check_bz2,
@@ -31,11 +25,6 @@ from galaxy.util.checkers import (
     check_zip,
     is_tar,
 )
-
-if sys.version_info < (3, 3):
-    import bz2file as bz2
-else:
-    import bz2
 
 log = logging.getLogger(__name__)
 
@@ -49,49 +38,46 @@ def get_test_fname(fname):
     return full_path
 
 
-def stream_url_to_file(path):
-    page = urlopen(path)  # page will be .close()ed in stream_to_file
-    temp_name = stream_to_file(page, prefix='url_paste', source_encoding=util.get_charset_from_http_headers(page.headers))
-    return temp_name
+def stream_url_to_file(path, file_sources=None):
+    prefix = "url_paste"
+    if file_sources and file_sources.looks_like_uri(path):
+        file_source_path = file_sources.get_file_source_path(path)
+        _, temp_name = tempfile.mkstemp(prefix=prefix)
+        file_source_path.file_source.realize_to(file_source_path.path, temp_name)
+        return temp_name
+    else:
+        page = urllib.request.urlopen(path)  # page will be .close()ed in stream_to_file
+        temp_name = stream_to_file(page, prefix=prefix, source_encoding=util.get_charset_from_http_headers(page.headers))
+        return temp_name
 
 
 def stream_to_open_named_file(stream, fd, filename, source_encoding=None, source_error='strict', target_encoding=None, target_error='strict'):
     """Writes a stream to the provided file descriptor, returns the file name. Closes file descriptor"""
     # signature and behavor is somewhat odd, due to backwards compatibility, but this can/should be done better
     CHUNK_SIZE = 1048576
-    data_checked = False
-    is_compressed = False
-    is_binary = False
     try:
         codecs.lookup(target_encoding)
     except Exception:
         target_encoding = util.DEFAULT_ENCODING  # utf-8
-    if not source_encoding:
-        source_encoding = util.DEFAULT_ENCODING  # sys.getdefaultencoding() would mimic old behavior (defaults to ascii)
+    use_source_encoding = source_encoding is not None
     while True:
         chunk = stream.read(CHUNK_SIZE)
         if not chunk:
             break
-        if not data_checked:
-            # See if we're uploading a compressed file
+        if use_source_encoding:
+            # If a source encoding is given we use it to convert to the target encoding
             try:
-                # Convert chunk to a bytestring if it is not already.
-                # Check if the first 2 bytes of the chunk are equal to the
-                # gzip magic number.
-                if smart_str(chunk)[:2] == util.gzip_magic:
-                    is_compressed = True
-            except Exception:
-                pass
-            if not is_compressed:
-                is_binary = util.is_binary(chunk)
-            data_checked = True
-        if not is_compressed and not is_binary:
-            if not isinstance(chunk, text_type):
-                chunk = chunk.decode(source_encoding, source_error)
-            os.write(fd, chunk.encode(target_encoding, target_error))
+                if not isinstance(chunk, str):
+                    chunk = chunk.decode(source_encoding, source_error)
+                os.write(fd, chunk.encode(target_encoding, target_error))
+            except UnicodeDecodeError:
+                use_source_encoding = False
+                os.write(fd, chunk)
         else:
             # Compressed files must be encoded after they are uncompressed in the upload utility,
             # while binary files should not be encoded at all.
+            if isinstance(chunk, str):
+                chunk = chunk.encode(target_encoding, target_error)
             os.write(fd, chunk)
     os.close(fd)
     return filename
@@ -103,28 +89,51 @@ def stream_to_file(stream, suffix='', prefix='', dir=None, text=False, **kwd):
     return stream_to_open_named_file(stream, fd, temp_name, **kwd)
 
 
-def convert_newlines(fname, in_place=True, tmp_dir=None, tmp_prefix="gxupload"):
+def handle_composite_file(datatype, src_path, extra_files, name, is_binary, tmp_dir, tmp_prefix, upload_opts):
+    if not is_binary:
+        if upload_opts.get('space_to_tab'):
+            convert_newlines_sep2tabs(src_path, tmp_dir=tmp_dir, tmp_prefix=tmp_prefix)
+        else:
+            convert_newlines(src_path, tmp_dir=tmp_dir, tmp_prefix=tmp_prefix)
+
+    file_output_path = os.path.join(extra_files, name)
+    shutil.move(src_path, file_output_path)
+
+    # groom the dataset file content if required by the corresponding datatype definition
+    if datatype and datatype.dataset_content_needs_grooming(file_output_path):
+        datatype.groom_dataset_content(file_output_path)
+
+
+def convert_newlines(fname, in_place=True, tmp_dir=None, tmp_prefix="gxupload", block_size=128 * 1024, regexp=None):
     """
     Converts in place a file from universal line endings
     to Posix line endings.
-
-    >>> fname = get_test_fname('temp.txt')
-    >>> with open(fname, 'wt') as fh:
-    ...     _ = fh.write("1 2\\r3 4")
-    >>> convert_newlines(fname, tmp_prefix="gxtest", tmp_dir=tempfile.gettempdir())
-    (2, None)
-    >>> open(fname).read()
-    '1 2\\n3 4\\n'
     """
     fd, temp_name = tempfile.mkstemp(prefix=tmp_prefix, dir=tmp_dir)
-    with io.open(fd, mode="wt", encoding='utf-8') as fp:
-        i = None
-        for i, line in enumerate(io.open(fname, encoding='utf-8')):
-            fp.write("%s\n" % line.rstrip("\r\n"))
-    if i is None:
-        i = 0
-    else:
-        i += 1
+    i = 0
+    NEWLINE_BYTE = 10
+    CR_BYTE = 13
+    with open(fd, mode="wb") as fp, open(fname, mode="rb") as fi:
+        last_char = None
+        block = fi.read(block_size)
+        last_block = b""
+        while block:
+            if last_char == CR_BYTE and block.startswith(b"\n"):
+                # Last block ended with CR, new block startswith newline.
+                # Since we replace CR with newline in the previous iteration we skip the first byte
+                block = block[1:]
+            if block:
+                last_char = block[-1]
+                block = block.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+                if regexp:
+                    block = b"\t".join(regexp.split(block))
+                fp.write(block)
+                i += block.count(b"\n")
+                last_block = block
+                block = fi.read(block_size)
+        if last_block and last_block[-1] != NEWLINE_BYTE:
+            i += 1
+            fp.write(b"\n")
     if in_place:
         shutil.move(temp_name, fname)
         # Return number of lines in file.
@@ -133,47 +142,9 @@ def convert_newlines(fname, in_place=True, tmp_dir=None, tmp_prefix="gxupload"):
         return (i, temp_name)
 
 
-def sep2tabs(fname, in_place=True, patt=r"\s+", tmp_dir=None, tmp_prefix="gxupload"):
+def convert_newlines_sep2tabs(fname, in_place=True, patt=br"[^\S\n]+", tmp_dir=None, tmp_prefix="gxupload"):
     """
-    Transforms in place a 'sep' separated file to a tab separated one
-
-    >>> fname = get_test_fname('temp.txt')
-    >>> with open(fname, 'wt') as fh:
-    ...     _ = fh.write(u"1 2\\n3 4\\n")
-    >>> sep2tabs(fname)
-    (2, None)
-    >>> open(fname).read()
-    '1\\t2\\n3\\t4\\n'
-    """
-    regexp = re.compile(patt)
-    fd, temp_name = tempfile.mkstemp(prefix=tmp_prefix, dir=tmp_dir)
-    with io.open(fd, mode="wt", encoding='utf-8') as fp:
-        i = None
-        for i, line in enumerate(io.open(fname, encoding='utf-8')):
-            if line.endswith("\r"):
-                line = line.rstrip('\r')
-                elems = regexp.split(line)
-                fp.write(u"%s\r" % '\t'.join(elems))
-            else:
-                line = line.rstrip('\n')
-                elems = regexp.split(line)
-                fp.write(u"%s\n" % '\t'.join(elems))
-    if i is None:
-        i = 0
-    else:
-        i += 1
-    if in_place:
-        shutil.move(temp_name, fname)
-        # Return number of lines in file.
-        return (i, None)
-    else:
-        return (i, temp_name)
-
-
-def convert_newlines_sep2tabs(fname, in_place=True, patt=r"\s+", tmp_dir=None, tmp_prefix="gxupload"):
-    """
-    Combines above methods: convert_newlines() and sep2tabs()
-    so that files do not need to be read twice
+    Converts newlines in a file to posix newlines and replaces spaces with tabs.
 
     >>> fname = get_test_fname('temp.txt')
     >>> with open(fname, 'wt') as fh:
@@ -184,18 +155,7 @@ def convert_newlines_sep2tabs(fname, in_place=True, patt=r"\s+", tmp_dir=None, t
     '1\\t2\\n3\\t4\\n'
     """
     regexp = re.compile(patt)
-    fd, temp_name = tempfile.mkstemp(prefix=tmp_prefix, dir=tmp_dir)
-    with io.open(fd, mode="wt", encoding='utf-8') as fp:
-        for i, line in enumerate(io.open(fname, encoding='utf-8')):
-            line = line.rstrip('\r\n')
-            elems = regexp.split(line)
-            fp.write(u"%s\n" % '\t'.join(elems))
-    if in_place:
-        shutil.move(temp_name, fname)
-        # Return number of lines in file.
-        return (i + 1, None)
-    else:
-        return (i + 1, temp_name)
+    return convert_newlines(fname, in_place, tmp_dir, tmp_prefix, regexp=regexp)
 
 
 def iter_headers(fname_or_file_prefix, sep, count=60, comment_designator=None):
@@ -212,6 +172,11 @@ def iter_headers(fname_or_file_prefix, sep, count=60, comment_designator=None):
         idx += 1
         if idx == count:
             break
+
+
+def validate_tabular(fname_or_file_prefix, validate_row, sep, comment_designator=None):
+    for row in iter_headers(fname_or_file_prefix, sep, count=-1, comment_designator=comment_designator):
+        validate_row(row)
 
 
 def get_headers(fname_or_file_prefix, sep, count=60, comment_designator=None):
@@ -471,6 +436,12 @@ def guess_ext(fname, sniff_order, is_binary=False):
     >>> fname = get_test_fname('1.fastqsanger.gz')
     >>> guess_ext(fname, sniff_order)  # See test_datatype_registry for more compressed type tests.
     'fastqsanger.gz'
+    >>> fname = get_test_fname('1.mtx')
+    >>> guess_ext(fname, sniff_order)
+    'mtx'
+    >>> fname = get_test_fname('1imzml')
+    >>> guess_ext(fname, sniff_order)  # This test case is ensuring doesn't throw exception, actual value could change if non-utf encoding handling improves.
+    'data'
     """
     file_prefix = FilePrefix(fname)
     file_ext = run_sniffers_raw(file_prefix, sniff_order, is_binary)
@@ -523,7 +494,7 @@ def run_sniffers_raw(filename_or_file_prefix, sniff_order, is_binary=False):
                     continue
                 if not datatype_compressed and file_prefix.compressed_format:
                     continue
-                if file_prefix.compressed_format and getattr(datatype, "compressed_format"):
+                if file_prefix.compressed_format and getattr(datatype, "compressed_format", None):
                     # In this case go a step further and compare the compressed format detected
                     # to the expected.
                     if file_prefix.compressed_format != datatype.compressed_format:
@@ -549,11 +520,12 @@ def zip_single_fileobj(path):
             return z.open(name)
 
 
-class FilePrefix(object):
+class FilePrefix:
 
     def __init__(self, filename):
-        binary = False
+        non_utf8_error = None
         compressed_format = None
+        contents_header_bytes = None
         contents_header = None  # First MAX_BYTES of the file.
         truncated = False
         # A future direction to optimize sniffing even more for sniffers at the top of the list
@@ -562,20 +534,23 @@ class FilePrefix(object):
         # populates contents_header while providing a StringIO-like interface until the file is read
         # but then would fallback to native string_io()
         try:
-            compressed_format, f = compression_utils.get_fileobj_raw(filename)
+            compressed_format, f = compression_utils.get_fileobj_raw(filename, "rb")
             try:
-                contents_header = f.read(SNIFF_PREFIX_BYTES)
-                truncated = len(contents_header) == SNIFF_PREFIX_BYTES
+                contents_header_bytes = f.read(SNIFF_PREFIX_BYTES)
+                truncated = len(contents_header_bytes) == SNIFF_PREFIX_BYTES
+                contents_header = contents_header_bytes.decode("utf-8")
             finally:
                 f.close()
-        except UnicodeDecodeError:
-            binary = True
+        except UnicodeDecodeError as e:
+            non_utf8_error = e
 
         self.truncated = truncated
         self.filename = filename
-        self.binary = binary
+        self.non_utf8_error = non_utf8_error
+        self.binary = non_utf8_error is not None  # obviously wrong
         self.compressed_format = compressed_format
         self.contents_header = contents_header
+        self.contents_header_bytes = contents_header_bytes
         self._file_size = None
 
     @property
@@ -585,9 +560,9 @@ class FilePrefix(object):
         return self._file_size
 
     def string_io(self):
-        if self.binary:
-            raise Exception("Attempting to create a StringIO object for binary data.")
-        rval = StringIO(self.contents_header)
+        if self.non_utf8_error is not None:
+            raise self.non_utf8_error
+        rval = io.StringIO(self.contents_header)
         return rval
 
     def startswith(self, prefix):
@@ -673,9 +648,10 @@ def handle_compressed_file(
     is_valid = False
     uncompressed = filename
     tmp_dir = tmp_dir or os.path.dirname(filename)
-    for compressed_type, check_compressed_function in COMPRESSION_CHECK_FUNCTIONS:
+    for key, check_compressed_function in COMPRESSION_CHECK_FUNCTIONS:
         is_compressed, is_valid = check_compressed_function(filename, check_content=check_content)
         if is_compressed:
+            compressed_type = key
             break  # found compression type
     if is_compressed and is_valid:
         if ext in AUTO_DETECT_EXTENSIONS:
@@ -696,11 +672,11 @@ def handle_compressed_file(
         while True:
             try:
                 chunk = compressed_file.read(CHUNK_SIZE)
-            except IOError as e:
+            except OSError as e:
                 os.close(fd)
                 os.remove(uncompressed)
                 compressed_file.close()
-                raise IOError('Problem uncompressing %s data, please try retrieving the data uncompressed: %s' % (compressed_type, e))
+                raise OSError('Problem uncompressing {} data, please try retrieving the data uncompressed: {}'.format(compressed_type, util.unicodify(e)))
             if not chunk:
                 break
             os.write(fd, chunk)

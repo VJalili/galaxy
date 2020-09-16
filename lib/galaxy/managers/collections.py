@@ -1,10 +1,9 @@
 import logging
+from collections import OrderedDict
+
+from sqlalchemy.orm import joinedload, Query
 
 from galaxy import model
-from galaxy.dataset_collections import builder
-from galaxy.dataset_collections.matching import MatchingCollections
-from galaxy.dataset_collections.registry import DatasetCollectionTypesRegistry
-from galaxy.dataset_collections.type_description import CollectionTypeDescriptionFactory
 from galaxy.exceptions import (
     ItemAccessibilityException,
     MessageException,
@@ -17,8 +16,11 @@ from galaxy.managers import (
 )
 from galaxy.managers.collections_util import validate_input_element_identifiers
 from galaxy.model import tags
+from galaxy.model.dataset_collections import builder
+from galaxy.model.dataset_collections.matching import MatchingCollections
+from galaxy.model.dataset_collections.registry import DATASET_COLLECTION_TYPES_REGISTRY
+from galaxy.model.dataset_collections.type_description import COLLECTION_TYPE_DESCRIPTION_FACTORY
 from galaxy.util import (
-    odict,
     validation
 )
 
@@ -28,7 +30,7 @@ ERROR_INVALID_ELEMENTS_SPECIFICATION = "Create called with invalid parameters, m
 ERROR_NO_COLLECTION_TYPE = "Create called without specifying a collection type."
 
 
-class DatasetCollectionManager(object):
+class DatasetCollectionManager:
     """
     Abstraction for interfacing with dataset collections instance - ideally abstracts
     out model and plugin details.
@@ -36,8 +38,8 @@ class DatasetCollectionManager(object):
     ELEMENTS_UNINITIALIZED = object()
 
     def __init__(self, app):
-        self.type_registry = DatasetCollectionTypesRegistry(app)
-        self.collection_type_descriptions = CollectionTypeDescriptionFactory(self.type_registry)
+        self.type_registry = DATASET_COLLECTION_TYPES_REGISTRY
+        self.collection_type_descriptions = COLLECTION_TYPE_DESCRIPTION_FACTORY
         self.model = app.model
         self.security = app.security
 
@@ -46,15 +48,15 @@ class DatasetCollectionManager(object):
         self.tag_handler = tags.GalaxyTagHandler(app.model.context)
         self.ldda_manager = lddas.LDDAManager(app)
 
-    def precreate_dataset_collection_instance(self, trans, parent, name, structure, implicit_inputs=None, implicit_output_name=None, tags=None):
+    def precreate_dataset_collection_instance(self, trans, parent, name, structure, implicit_inputs=None, implicit_output_name=None, tags=None, completed_collection=None):
         # TODO: prebuild all required HIDs and send them in so no need to flush in between.
-        dataset_collection = self.precreate_dataset_collection(structure, allow_unitialized_element=implicit_output_name is not None)
+        dataset_collection = self.precreate_dataset_collection(structure, allow_unitialized_element=implicit_output_name is not None, completed_collection=completed_collection, implicit_output_name=implicit_output_name)
         instance = self._create_instance_for_collection(
             trans, parent, name, dataset_collection, implicit_inputs=implicit_inputs, implicit_output_name=implicit_output_name, flush=False, tags=tags
         )
         return instance
 
-    def precreate_dataset_collection(self, structure, allow_unitialized_element=True):
+    def precreate_dataset_collection(self, structure, allow_unitialized_element=True, completed_collection=None, implicit_output_name=None):
         has_structure = not structure.is_leaf and structure.children_known
         if not has_structure and allow_unitialized_element:
             dataset_collection = model.DatasetCollectionElement.UNINITIALIZED_ELEMENT
@@ -69,10 +71,17 @@ class DatasetCollectionManager(object):
             elements = []
             for index, (identifier, substructure) in enumerate(structure.children):
                 # TODO: Open question - populate these now or later?
-                if substructure.is_leaf:
-                    element = model.DatasetCollectionElement.UNINITIALIZED_ELEMENT
-                else:
-                    element = self.precreate_dataset_collection(substructure, allow_unitialized_element=allow_unitialized_element)
+                element = None
+                if completed_collection and implicit_output_name:
+                    job = completed_collection[index]
+                    if job:
+                        it = (jtiodca.dataset_collection for jtiodca in job.output_dataset_collections if jtiodca.name == implicit_output_name)
+                        element = next(it, None)
+                if element is None:
+                    if substructure.is_leaf:
+                        element = model.DatasetCollectionElement.UNINITIALIZED_ELEMENT
+                    else:
+                        element = self.precreate_dataset_collection(substructure, allow_unitialized_element=allow_unitialized_element)
 
                 element = model.DatasetCollectionElement(
                     element=element,
@@ -87,7 +96,8 @@ class DatasetCollectionManager(object):
 
     def create(self, trans, parent, name, collection_type, element_identifiers=None,
                elements=None, implicit_collection_info=None, trusted_identifiers=None,
-               hide_source_items=False, tags=None, copy_elements=False):
+               hide_source_items=False, tags=None, copy_elements=False, history=None,
+               set_hid=True, flush=True, completed_job=None, output_name=None):
         """
         PRECONDITION: security checks on ability to add to parent
         occurred during load.
@@ -99,14 +109,19 @@ class DatasetCollectionManager(object):
         if element_identifiers and not trusted_identifiers:
             validate_input_element_identifiers(element_identifiers)
 
-        dataset_collection = self.create_dataset_collection(
-            trans=trans,
-            collection_type=collection_type,
-            element_identifiers=element_identifiers,
-            elements=elements,
-            hide_source_items=hide_source_items,
-            copy_elements=copy_elements,
-        )
+        if completed_job and output_name:
+            jtodca = next(a for a in completed_job.output_dataset_collection_instances if a.name == output_name)
+            dataset_collection = jtodca.dataset_collection_instance.collection
+        else:
+            dataset_collection = self.create_dataset_collection(
+                trans=trans,
+                collection_type=collection_type,
+                element_identifiers=element_identifiers,
+                elements=elements,
+                hide_source_items=hide_source_items,
+                copy_elements=copy_elements,
+                history=history,
+            )
 
         implicit_inputs = []
         if implicit_collection_info:
@@ -117,10 +132,10 @@ class DatasetCollectionManager(object):
             implicit_output_name = implicit_collection_info["implicit_output_name"]
 
         return self._create_instance_for_collection(
-            trans, parent, name, dataset_collection, implicit_inputs=implicit_inputs, implicit_output_name=implicit_output_name, tags=tags
+            trans, parent, name, dataset_collection, implicit_inputs=implicit_inputs, implicit_output_name=implicit_output_name, tags=tags, set_hid=set_hid, flush=flush,
         )
 
-    def _create_instance_for_collection(self, trans, parent, name, dataset_collection, implicit_output_name=None, implicit_inputs=None, tags=None, flush=True):
+    def _create_instance_for_collection(self, trans, parent, name, dataset_collection, implicit_output_name=None, implicit_inputs=None, tags=None, set_hid=True, flush=True):
         if isinstance(parent, model.History):
             dataset_collection_instance = self.model.HistoryDatasetCollectionAssociation(
                 collection=dataset_collection,
@@ -134,8 +149,9 @@ class DatasetCollectionManager(object):
                 dataset_collection_instance.implicit_output_name = implicit_output_name
 
             log.debug("Created collection with %d elements" % (len(dataset_collection_instance.collection.elements)))
-            # Handle setting hid
-            parent.add_dataset_collection(dataset_collection_instance)
+
+            if set_hid:
+                parent.add_dataset_collection(dataset_collection_instance)
 
         elif isinstance(parent, model.LibraryFolder):
             dataset_collection_instance = self.model.LibraryDatasetCollectionAssociation(
@@ -160,7 +176,7 @@ class DatasetCollectionManager(object):
         return self.__persist(dataset_collection_instance, flush=flush)
 
     def create_dataset_collection(self, trans, collection_type, element_identifiers=None, elements=None,
-                                  hide_source_items=None, copy_elements=False):
+                                  hide_source_items=None, copy_elements=False, history=None):
         # Make sure at least one of these is None.
         assert element_identifiers is None or elements is None
 
@@ -178,11 +194,12 @@ class DatasetCollectionManager(object):
                                                              collection_type_description=collection_type_description,
                                                              element_identifiers=element_identifiers,
                                                              hide_source_items=hide_source_items,
-                                                             copy_elements=copy_elements)
+                                                             copy_elements=copy_elements,
+                                                             history=history)
         else:
             if has_subcollections:
                 # Nested collection - recursively create collections as needed.
-                self.__recursively_create_collections_for_elements(trans, elements, hide_source_items, copy_elements=copy_elements)
+                self.__recursively_create_collections_for_elements(trans, elements, hide_source_items, copy_elements=copy_elements, history=history)
         # else if elements is set, it better be an ordered dict!
 
         if elements is not self.ELEMENTS_UNINITIALIZED:
@@ -198,7 +215,8 @@ class DatasetCollectionManager(object):
                                          collection_type_description,
                                          element_identifiers,
                                          hide_source_items=False,
-                                         copy_elements=False):
+                                         copy_elements=False,
+                                         history=None):
         if collection_type_description.has_subcollections():
             # Nested collection - recursively create collections and update identifiers.
             self.__recursively_create_collections_for_identifiers(trans, element_identifiers, hide_source_items, copy_elements)
@@ -209,12 +227,14 @@ class DatasetCollectionManager(object):
                 elements = self.__load_elements(trans=trans,
                                                 element_identifiers=element_identifier['element_identifiers'],
                                                 hide_source_items=hide_source_items,
-                                                copy_elements=copy_elements)
+                                                copy_elements=copy_elements,
+                                                history=history)
         if not new_collection:
             elements = self.__load_elements(trans=trans,
                                             element_identifiers=element_identifiers,
                                             hide_source_items=hide_source_items,
-                                            copy_elements=copy_elements)
+                                            copy_elements=copy_elements,
+                                            history=history)
         return elements
 
     def _append_tags(self, dataset_collection_instance, implicit_inputs=None, tags=None):
@@ -239,9 +259,7 @@ class DatasetCollectionManager(object):
         return dataset_collection
 
     def collection_builder_for(self, dataset_collection):
-        collection_type = dataset_collection.collection_type
-        collection_type_description = self.collection_type_descriptions.for_collection_type(collection_type)
-        return builder.BoundCollectionBuilder(dataset_collection, collection_type_description)
+        return builder.BoundCollectionBuilder(dataset_collection)
 
     def delete(self, trans, instance_type, id, recursive=False, purge=False):
         dataset_collection_instance = self.get_dataset_collection_instance(trans, instance_type, id, check_ownership=True)
@@ -356,11 +374,11 @@ class DatasetCollectionManager(object):
 
         return element_identifiers
 
-    def __recursively_create_collections_for_elements(self, trans, elements, hide_source_items, copy_elements):
+    def __recursively_create_collections_for_elements(self, trans, elements, hide_source_items, copy_elements, history=None):
         if elements is self.ELEMENTS_UNINITIALIZED:
             return
 
-        new_elements = odict.odict()
+        new_elements = OrderedDict()
         for key, element in elements.items():
             if isinstance(element, model.DatasetCollection):
                 continue
@@ -369,7 +387,7 @@ class DatasetCollectionManager(object):
                 continue
 
             # element is a dict with src new_collection and
-            # and odict of named elements
+            # and OrderedDict of named elements
             collection_type = element.get("collection_type", None)
             sub_elements = element["elements"]
             collection = self.create_dataset_collection(
@@ -377,21 +395,23 @@ class DatasetCollectionManager(object):
                 collection_type=collection_type,
                 elements=sub_elements,
                 hide_source_items=hide_source_items,
-                copy_elements=copy_elements
+                copy_elements=copy_elements,
+                history=history,
             )
             new_elements[key] = collection
         elements.update(new_elements)
 
-    def __load_elements(self, trans, element_identifiers, hide_source_items=False, copy_elements=False):
-        elements = odict.odict()
+    def __load_elements(self, trans, element_identifiers, hide_source_items=False, copy_elements=False, history=None):
+        elements = OrderedDict()
         for element_identifier in element_identifiers:
             elements[element_identifier["name"]] = self.__load_element(trans,
                                                                        element_identifier=element_identifier,
                                                                        hide_source_items=hide_source_items,
-                                                                       copy_elements=copy_elements)
+                                                                       copy_elements=copy_elements,
+                                                                       history=history)
         return elements
 
-    def __load_element(self, trans, element_identifier, hide_source_items, copy_elements):
+    def __load_element(self, trans, element_identifier, hide_source_items, copy_elements, history=None):
         # if not isinstance( element_identifier, dict ):
         #    # Is allowing this to just be the id of an hda too clever? Somewhat
         #    # consistent with other API methods though.
@@ -426,15 +446,15 @@ class DatasetCollectionManager(object):
             decoded_id = int(trans.app.security.decode_id(encoded_id))
             hda = self.hda_manager.get_accessible(decoded_id, trans.user)
             if copy_elements:
-                element = self.hda_manager.copy(hda, history=trans.history, hide_copy=True)
+                element = self.hda_manager.copy(hda, history=history or trans.history, hide_copy=True)
             else:
                 element = hda
-            if hide_source_items and self.hda_manager.get_owned(hda.id, user=trans.user, current_history=trans.history):
+            if hide_source_items and self.hda_manager.get_owned(hda.id, user=trans.user, current_history=history or trans.history):
                 hda.visible = False
             self.tag_handler.apply_item_tags(user=trans.user, item=element, tags_str=tag_str)
         elif src_type == 'ldda':
             element = self.ldda_manager.get(trans, encoded_id, check_accessible=True)
-            element = element.to_history_dataset_association(trans.history, add_to_history=True)
+            element = element.to_history_dataset_association(history or trans.history, add_to_history=True, visible=not hide_source_items)
             self.tag_handler.apply_item_tags(user=trans.user, item=element, tags_str=tag_str)
         elif src_type == 'hdca':
             # TODO: Option to copy? Force copy? Copy or allow if not owned?
@@ -479,7 +499,7 @@ class DatasetCollectionManager(object):
 
     def _build_elements_from_rule_data(self, collection_type_description, rule_set, data, sources, handle_dataset):
         identifier_columns = rule_set.identifier_columns
-        elements = odict.odict()
+        elements = OrderedDict()
         for data_index, row_data in enumerate(data):
             # For each row, find place in depth for this element.
             collection_type_at_depth = collection_type_description
@@ -510,7 +530,7 @@ class DatasetCollectionManager(object):
                         sub_collection = {}
                         sub_collection["src"] = "new_collection"
                         sub_collection["collection_type"] = collection_type_at_depth.collection_type
-                        sub_collection["elements"] = odict.odict()
+                        sub_collection["elements"] = OrderedDict()
                         elements_at_depth[identifier] = sub_collection
                         elements_at_depth = sub_collection["elements"]
 
@@ -555,3 +575,15 @@ class DatasetCollectionManager(object):
             if not trans.app.security_agent.can_access_library_item(trans.get_current_user_roles(), collection_instance, trans.user):
                 raise ItemAccessibilityException("LibraryDatasetCollectionAssociation is not accessible to the current user", type='error')
         return collection_instance
+
+    def get_collection_contents_qry(self, parent_id, limit=None, offset=None):
+        """Find first level of collection contents by containing collection parent_id"""
+        DCE = model.DatasetCollectionElement
+        qry = Query(DCE).filter(DCE.dataset_collection_id == parent_id)
+        qry = qry.order_by(DCE.element_index)
+        qry = qry.options(joinedload('child_collection'), joinedload('hda'))
+        if limit is not None:
+            qry = qry.limit(int(limit))
+        if offset is not None:
+            qry = qry.offset(int(offset))
+        return qry

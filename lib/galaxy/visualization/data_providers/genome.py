@@ -81,7 +81,7 @@ class FeatureLocationIndexDataProvider(BaseDataProvider):
 
     def get_data(self, query):
         # Init.
-        textloc_file = open(self.converted_dataset.file_name, 'r')
+        textloc_file = open(self.converted_dataset.file_name)
         line_len = int(textloc_file.readline())
         file_len = os.path.getsize(self.converted_dataset.file_name)
         query = query.lower()
@@ -139,10 +139,10 @@ class GenomeDataProvider(BaseDataProvider):
 
     def __init__(self, converted_dataset=None, original_dataset=None, dependencies=None,
                  error_max_vals="Only the first %i %s in this region are displayed."):
-        super(GenomeDataProvider, self).__init__(converted_dataset=converted_dataset,
-                                                 original_dataset=original_dataset,
-                                                 dependencies=dependencies,
-                                                 error_max_vals=error_max_vals)
+        super().__init__(converted_dataset=converted_dataset,
+                         original_dataset=original_dataset,
+                         dependencies=dependencies,
+                         error_max_vals=error_max_vals)
 
     def write_data_to_file(self, regions, filename):
         """
@@ -270,7 +270,7 @@ class GenomeDataProvider(BaseDataProvider):
 #
 
 
-class FilterableMixin(object):
+class FilterableMixin:
     def get_filters(self):
         """ Returns a dataset's filters. """
         # Get filters.
@@ -447,7 +447,6 @@ class IntervalTabixDataProvider(TabixDataProvider, IntervalDataProvider):
     """
     Provides data from a BED file indexed via tabix.
     """
-    pass
 
 
 #
@@ -547,7 +546,6 @@ class BedTabixDataProvider(TabixDataProvider, BedDataProvider):
     """
     Provides data from a BED file indexed via tabix.
     """
-    pass
 
 
 class RawBedDataProvider(BedDataProvider):
@@ -1099,9 +1097,9 @@ class SamDataProvider(BamDataProvider):
 
     def __init__(self, converted_dataset=None, original_dataset=None, dependencies=None):
         """ Create SamDataProvider. """
-        super(SamDataProvider, self).__init__(converted_dataset=converted_dataset,
-                                              original_dataset=original_dataset,
-                                              dependencies=dependencies)
+        super().__init__(converted_dataset=converted_dataset,
+                         original_dataset=original_dataset,
+                         dependencies=dependencies)
 
         # To use BamDataProvider, original dataset must be BAM and
         # converted dataset must be BAI. Use BAI from BAM metadata.
@@ -1223,11 +1221,11 @@ class BBIDataProvider(GenomeDataProvider):
 
             # Start with N samples.
             num_points = num_samples
-            step_size = (end - start) / num_points
+            step_size = (end - start) // num_points
             # Add additional points to sample in the remainder not covered by
             # the initial N samples.
             remainder_start = start + step_size * num_points
-            additional_points = (end - remainder_start) / step_size
+            additional_points = (end - remainder_start) // step_size
             num_points += additional_points
 
         result = summarize_region(bbi, chrom, start, end, num_points)
@@ -1243,7 +1241,7 @@ class BBIDataProvider(GenomeDataProvider):
 class BigBedDataProvider(BBIDataProvider):
     def _get_dataset(self):
         # Nothing converts to bigBed so we don't consider converted dataset
-        f = open(self.original_dataset.file_name)
+        f = open(self.original_dataset.file_name, 'rb')
         return f, BigBedFile(file=f)
 
 
@@ -1255,9 +1253,9 @@ class BigWigDataProvider(BBIDataProvider):
 
     def _get_dataset(self):
         if self.converted_dataset is not None:
-            f = open(self.converted_dataset.file_name)
+            f = open(self.converted_dataset.file_name, 'rb')
         else:
-            f = open(self.original_dataset.file_name)
+            f = open(self.original_dataset.file_name, 'rb')
         return f, BigWigFile(file=f)
 
 

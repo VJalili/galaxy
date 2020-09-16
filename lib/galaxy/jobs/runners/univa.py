@@ -27,11 +27,15 @@ known bugs/problems:
 import logging
 import re
 import signal
-import subprocess
 import time
 
-from galaxy import util
 from galaxy.jobs.runners.drmaa import DRMAAJobRunner
+from galaxy.util import (
+    commands,
+    size_to_bytes,
+    unicodify
+)
+
 log = logging.getLogger(__name__)
 
 __all__ = ('UnivaJobRunner',)
@@ -108,7 +112,7 @@ class UnivaJobRunner(DRMAAJobRunner):
             log.error("DRMAAUniva: job {job_id} determined unknown state {state}".format(job_id=ajs.job_id, state=state))
             drmaa_state = self.drmaa_job_states.FAILED
         # by default, finish the job with the state from drmaa
-        return super(UnivaJobRunner, self)._complete_terminal_job(ajs, drmaa_state=drmaa_state)
+        return super()._complete_terminal_job(ajs, drmaa_state=drmaa_state)
 
     def _drmaa_state_is_refined(self, statep, staten):
         """
@@ -153,10 +157,10 @@ class UnivaJobRunner(DRMAAJobRunner):
         # even if this could be disambiguated by the stderr message the `qstat -u "*"`
         # way seems more generic
         cmd = ['qstat', '-u', '"*"']
-        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        stdout, stderr = p.communicate()
-        if p.returncode != 0 or stderr != "":
-            log.exception('`%s` returned %d, stderr: %s' % (' '.join(cmd), p.returncode, stderr))
+        try:
+            stdout = commands.execute(cmd).strip()
+        except commands.CommandLineException as e:
+            log.error(unicodify(e))
             raise self.drmaa.InternalException()
         state = self.drmaa.JobState.UNDETERMINED
         for line in stdout.split('\n'):
@@ -188,25 +192,23 @@ class UnivaJobRunner(DRMAAJobRunner):
         - FAILED if failed not in [0,24,25,100]
         '''
         # log.debug("UnivaJobRunner._get_drmaa_state_qacct ({jobid})".format(jobid=job_id))
-        signals = dict((k, v) for v, k in reversed(sorted(signal.__dict__.items()))
-           if v.startswith('SIG') and not v.startswith('SIG_'))
+        signals = {k: v for v, k in reversed(sorted(signal.__dict__.items()))
+           if v.startswith('SIG') and not v.startswith('SIG_')}
         cmd = ['qacct', '-j', job_id]
         slp = 1
         # run qacct -j JOBID (since the accounting data for the job might not be
         # available immediately a simple retry mechanism is implemented ..
         # max wait is approx 1min)
         while True:
-            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            stdout, stderr = p.communicate()
-            stderr = stderr.strip()
-            if p.returncode != 0:
-                if slp <= 32 and "job id {jobid} not found".format(jobid=job_id) in stderr:
-                    # log.debug('`%s` returned %s, stderr: %s => retry after %ds' % (' '.join(cmd), p.returncode, stderr, slp))
+            try:
+                stdout = commands.execute(cmd).strip()
+            except commands.CommandLineException as e:
+                if slp <= 32 and "job id {jobid} not found".format(jobid=job_id) in e.stderr:
                     time.sleep(slp)
                     slp *= 2
                     continue
                 else:
-                    log.exception('`%s` returned %s, stderr: %s' % (' '.join(cmd), p.returncode, stderr))
+                    log.error(unicodify(e))
                     return self.drmaa.JobState.UNDETERMINED
             else:
                 break
@@ -243,7 +245,7 @@ class UnivaJobRunner(DRMAAJobRunner):
         # qdel       100     137          user@mail
 
         extinfo["time_wasted"] = _parse_time(qacct["wallclock"])
-        extinfo["memory_wasted"] = util.size_to_bytes(qacct["maxvmem"])
+        extinfo["memory_wasted"] = size_to_bytes(qacct["maxvmem"])
         extinfo["slots"] = int(qacct["slots"])
 
         # deleted_by
@@ -420,13 +422,15 @@ class UnivaJobRunner(DRMAAJobRunner):
         # log.debug("UnivaJobRunner._get_drmaa_state_wait ({jobid}) -> {state}".format(jobid=job_id, state=self.drmaa_job_state_strings[state]))
         return state
 
-    def _get_drmaa_state(self, job_id, ds, waitqacct, extinfo=dict()):
+    def _get_drmaa_state(self, job_id, ds, waitqacct, extinfo=None):
         """
         get the state using drmaa.job_info/qstat and drmaa.wait/qacct using the above functions
         qacct/wait is only called if waitqacct is True.
         the function returns the state (one of the drmaa states) and extended
         information in the extinfo dict
         """
+        if extinfo is None:
+            extinfo = {}
         # log.debug("UnivaJobRunner._get_drmaa_state ({jobid}) {qw}".format(jobid=job_id, qw=waitqacct))
         state = self.drmaa.JobState.UNDETERMINED
         # try to get the state with drmaa.job_status (does not work for jobs
@@ -569,7 +573,7 @@ def _parse_native_specs(job_id, native_spec):
     # parse memory
     m = re.search(r"mem=([\d.]+[KGMT]?)[\s,]*", native_spec)
     if m is not None:
-        mem = util.size_to_bytes(m.group(1))
+        mem = size_to_bytes(m.group(1))
         # mem = _parse_mem(m.group(1))
         if mem is None:
             log.error("DRMAAUniva: job {job_id} has unparsable memory native spec {spec}".format(job_id=job_id, spec=native_spec))

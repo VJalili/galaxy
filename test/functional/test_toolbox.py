@@ -8,11 +8,11 @@ except ImportError:
     def nottest(x):
         return x
 
-from base.driver_util import setup_keep_outdir, target_url_parts
-from base.instrument import register_job_data
-from base.testcase import FunctionalTestCase  # noqa: I100,I201,I202
-from galaxy.tools import DataManagerTool  # noqa: I201
-from galaxy.tools.verify.interactor import GalaxyInteractorApi, verify_tool  # noqa: I201
+from galaxy.tool_util.verify.interactor import GalaxyInteractorApi, verify_tool
+from galaxy.tools import DataManagerTool
+from galaxy_test.base.env import setup_keep_outdir, target_url_parts
+from galaxy_test.base.instrument import register_job_data
+from galaxy_test.driver.testcase import DrivenFunctionalTestCase
 
 log = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ toolbox = None
 TOOL_TYPES_NO_TEST = (DataManagerTool, )
 
 
-class ToolTestCase(FunctionalTestCase):
+class ToolTestCase(DrivenFunctionalTestCase):
     """Abstract test case that runs tests based on a `galaxy.tools.test.ToolTest`."""
 
     def do_it(self, tool_id=None, tool_version=None, test_index=0, resource_parameters={}):

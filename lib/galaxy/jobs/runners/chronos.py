@@ -1,10 +1,9 @@
-from __future__ import absolute_import
-
 import functools
 import logging
 
 from galaxy import model
 from galaxy.jobs.runners import AsynchronousJobRunner, AsynchronousJobState
+from galaxy.util import unicodify
 
 CHRONOS_IMPORT_MSG = ('The Python \'chronos\' package is required to use '
                       'this feature, please install it or correct the '
@@ -20,7 +19,7 @@ try:
     )
 except ImportError as e:
     chronos = None
-    CHRONOS_IMPORT_MSG.format(msg=str(e))
+    CHRONOS_IMPORT_MSG.format(msg=unicodify(e))
 
 
 __all__ = ('ChronosJobRunner',)
@@ -40,7 +39,7 @@ def handle_exception_call(func):
         try:
             return func(*args, **kwargs)
         except chronos_exceptions as e:
-            LOGGER.error(str(e))
+            LOGGER.error(unicodify(e))
 
     return wrapper
 
@@ -116,7 +115,7 @@ class ChronosJobRunner(AsynchronousJobRunner):
         if self.RUNNER_PARAM_SPEC_KEY not in kwargs:
             kwargs[self.RUNNER_PARAM_SPEC_KEY] = {}
         kwargs[self.RUNNER_PARAM_SPEC_KEY].update(self.RUNNER_PARAM_SPEC)
-        super(ChronosJobRunner, self).__init__(app, nworkers, **kwargs)
+        super().__init__(app, nworkers, **kwargs)
         protocol = 'http' if self.runner_params.get('insecure', True) else 'https'
         self._chronos_client = chronos.connect(
             self.runner_params['chronos'],
@@ -226,7 +225,7 @@ class ChronosJobRunner(AsynchronousJobRunner):
 
     @handle_exception_call
     def finish_job(self, job_state):
-        super(ChronosJobRunner, self).finish_job(job_state)
+        super().finish_job(job_state)
         self._chronos_client.delete(job_state.job_id)
 
     def parse_destination_params(self, params):

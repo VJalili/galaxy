@@ -23,11 +23,14 @@ from galaxy import (
     model
 )
 from galaxy.managers import (
+    annotatable,
     base,
     containers,
     deletable,
     hdas,
-    hdcas
+    hdcas,
+    taggable,
+    tools
 )
 
 log = logging.getLogger(__name__)
@@ -56,6 +59,7 @@ class HistoryContentsManager(containers.ContainerManagerMixin):
         "type_id",
         "hid",
         # joining columns
+        "extension",
         "dataset_id",
         "collection_id",
         "name",
@@ -118,27 +122,18 @@ class HistoryContentsManager(containers.ContainerManagerMixin):
     # order_by parsing - similar to FilterParser but not enough yet to warrant a class?
     def parse_order_by(self, order_by_string, default=None):
         """Return an ORM compatible order_by using the given string"""
-        if order_by_string in ('hid', 'hid-dsc'):
-            return desc('hid')
-        if order_by_string == 'hid-asc':
-            return asc('hid')
-        if order_by_string in ('create_time', 'create_time-dsc'):
-            return desc('create_time')
-        if order_by_string == 'create_time-asc':
-            return asc('create_time')
-        if order_by_string in ('update_time', 'update_time-dsc'):
-            return desc('update_time')
-        if order_by_string == 'update_time-asc':
-            return asc('update_time')
-        if order_by_string in ('name', 'name-asc'):
-            return asc('name')
-        if order_by_string == 'name-dsc':
-            return desc('name')
+        available = ['create_time', 'extension', 'hid', 'history_id', 'name', 'update_time']
+        for attribute in available:
+            attribute_dsc = '%s-dsc' % attribute
+            attribute_asc = '%s-asc' % attribute
+            if order_by_string in (attribute, attribute_dsc):
+                return desc(attribute)
+            if order_by_string == attribute_asc:
+                return asc(attribute)
         if default:
             return self.parse_order_by(default)
-        # TODO: allow order_by None
         raise glx_exceptions.RequestParameterInvalidException('Unknown order_by', order_by=order_by_string,
-            available=['create_time', 'update_time', 'name', 'hid'])
+            available=available)
 
     # history specific methods
     def state_counts(self, history):
@@ -149,8 +144,8 @@ class HistoryContentsManager(containers.ContainerManagerMixin):
         Note: does not include deleted/hidden contents.
         """
         filters = [
-            sql.column('deleted') == false(),
-            sql.column('visible') == true()
+            base.ModelFilterParser.parsed_filter("orm", sql.column('deleted') == false()),
+            base.ModelFilterParser.parsed_filter("orm", sql.column('visible') == true())
         ]
         contents_subquery = self._union_of_contents_query(history, filters=filters).subquery()
         statement = (sql.select([sql.column('state'), func.count('*')])
@@ -241,19 +236,37 @@ class HistoryContentsManager(containers.ContainerManagerMixin):
         contained_ids = id_map[self.contained_class_type_name]
         id_map[self.contained_class_type_name] = self._contained_id_map(contained_ids)
         subcontainer_ids = id_map[self.subcontainer_class_type_name]
-        id_map[self.subcontainer_class_type_name] = self._subcontainer_id_map(subcontainer_ids)
+        serialization_params = kwargs.get('serialization_params', None)
+        id_map[self.subcontainer_class_type_name] = self._subcontainer_id_map(subcontainer_ids, serialization_params=serialization_params)
 
         # cycle back over the union query to create an ordered list of the objects returned in queries 2 & 3 above
         contents = []
+        filters = kwargs.get('filters') or []
         # TODO: or as generator?
         for result in contents_results:
             result_type = self._get_union_type(result)
             contents_id = self._get_union_id(result)
             content = id_map[result_type][contents_id]
-            contents.append(content)
+            if self.passes_filters(content, filters):
+                contents.append(content)
         return contents
 
-    def _union_of_contents_query(self, container, filters=None, limit=None, offset=None, order_by=None, **kwargs):
+    @staticmethod
+    def passes_filters(content, filters):
+        for filter_fn in filters:
+            if filter_fn.filter_type == 'function':
+                if not filter_fn.filter(content):
+                    return False
+        return True
+
+    def _union_of_contents_query(self,
+                                 container,
+                                 filters=None,
+                                 limit=None,
+                                 offset=None,
+                                 order_by=None,
+                                 user_id=None,
+                                 **kwargs):
         """
         Returns a query for a limited and offset list of both types of contents,
         filtered and in some order.
@@ -271,13 +284,22 @@ class HistoryContentsManager(containers.ContainerManagerMixin):
         # note: I'm trying to keep these private functions as generic as possible in order to move them toward base later
 
         # query 1: create a union of common columns for which the component_classes can be filtered/limited
-        contained_query = self._contents_common_query_for_contained(container.id)
-        subcontainer_query = self._contents_common_query_for_subcontainer(container.id)
-        contents_query = contained_query.union(subcontainer_query)
+        contained_query = self._contents_common_query_for_contained(history_id=container.id if container else None,
+                                                                    user_id=user_id)
+        subcontainer_query = self._contents_common_query_for_subcontainer(history_id=container.id if container else None,
+                                                                          user_id=user_id)
 
-        # TODO: this needs the same fn/orm split that happens in the main query
-        for orm_filter in (filters or []):
-            contents_query = contents_query.filter(orm_filter)
+        filters = filters or []
+        # Apply filters that are specific to a model
+        for orm_filter in filters:
+            if orm_filter.filter_type == "orm_function":
+                contained_query = contained_query.filter(orm_filter.filter(self.contained_class))
+                subcontainer_query = subcontainer_query.filter(orm_filter.filter(self.subcontainer_class))
+            elif orm_filter.filter_type == "orm":
+                contained_query = self._apply_orm_filter(contained_query, orm_filter.filter)
+                subcontainer_query = self._apply_orm_filter(subcontainer_query, orm_filter.filter)
+
+        contents_query = contained_query.union_all(subcontainer_query)
         contents_query = contents_query.order_by(*order_by)
 
         if limit is not None:
@@ -285,6 +307,15 @@ class HistoryContentsManager(containers.ContainerManagerMixin):
         if offset is not None:
             contents_query = contents_query.offset(offset)
         return contents_query
+
+    def _apply_orm_filter(self, qry, orm_filter):
+        if isinstance(orm_filter, sql.elements.BinaryExpression):
+            for match in filter(lambda col: col['name'] == orm_filter.left.name, qry.column_descriptions):
+                column = match['expr']
+                new_filter = orm_filter._clone()
+                new_filter.left = column
+                qry = qry.filter(new_filter)
+        return qry
 
     def _contents_common_columns(self, component_class, **kwargs):
         columns = []
@@ -300,7 +331,7 @@ class HistoryContentsManager(containers.ContainerManagerMixin):
             columns.append(column)
         return columns
 
-    def _contents_common_query_for_contained(self, history_id):
+    def _contents_common_query_for_contained(self, history_id, user_id):
         component_class = self.contained_class
         # TODO: and now a join with Dataset - this is getting sad
         columns = self._contents_common_columns(component_class,
@@ -312,10 +343,17 @@ class HistoryContentsManager(containers.ContainerManagerMixin):
         subquery = self._session().query(*columns)
         # for the HDA's we need to join the Dataset since it has an actual state column
         subquery = subquery.join(model.Dataset, model.Dataset.id == component_class.dataset_id)
-        subquery = subquery.filter(component_class.history_id == history_id)
+        if history_id:
+            subquery = subquery.filter(component_class.history_id == history_id)
+        else:
+            # Make sure we only return items that are user-accessible by checking that they are in a history
+            # owned by the current user.
+            # TODO: move into filter mixin, and implement accessible logic as SQL query
+            subquery = subquery.filter(component_class.history_id == model.History.table.c.id,
+                                       model.History.table.c.user_id == user_id)
         return subquery
 
-    def _contents_common_query_for_subcontainer(self, history_id):
+    def _contents_common_query_for_subcontainer(self, history_id, user_id):
         component_class = self.subcontainer_class
         columns = self._contents_common_columns(component_class,
             history_content_type=literal('dataset_collection'),
@@ -324,6 +362,7 @@ class HistoryContentsManager(containers.ContainerManagerMixin):
             state=model.DatasetCollection.populated_state,
             # TODO: should be purgable? fix
             purged=literal(False),
+            extension=literal(None),
             # these are attached instead to the inner collection joined below
             create_time=model.DatasetCollection.create_time,
             update_time=model.DatasetCollection.update_time
@@ -332,7 +371,11 @@ class HistoryContentsManager(containers.ContainerManagerMixin):
         # for the HDCA's we need to join the DatasetCollection since it has update/create times
         subquery = subquery.join(model.DatasetCollection,
             model.DatasetCollection.id == component_class.collection_id)
-        subquery = subquery.filter(component_class.history_id == history_id)
+        if history_id:
+            subquery = subquery.filter(component_class.history_id == history_id)
+        else:
+            subquery = subquery.filter(component_class.history_id == model.History.table.c.id,
+                                       model.History.table.c.user_id == user_id)
         return subquery
 
     def _get_union_type(self, union):
@@ -354,9 +397,9 @@ class HistoryContentsManager(containers.ContainerManagerMixin):
             .options(eagerload('dataset.actions'))
             .options(eagerload('tags'))
             .options(eagerload('annotations')))
-        return dict((row.id, row) for row in query.all())
+        return {row.id: row for row in query.all()}
 
-    def _subcontainer_id_map(self, id_list):
+    def _subcontainer_id_map(self, id_list, serialization_params=None):
         """Return an id to model map of all subcontainer-type models in the id_list."""
         if not id_list:
             return []
@@ -366,7 +409,15 @@ class HistoryContentsManager(containers.ContainerManagerMixin):
             .options(eagerload('collection'))
             .options(eagerload('tags'))
             .options(eagerload('annotations')))
-        return dict((row.id, row) for row in query.all())
+
+        # This will conditionally join a potentially costly job_state summary
+        # All the paranoia if-checking makes me wonder if serialization_params
+        # should really be a property of the manager class instance
+        if serialization_params and serialization_params['keys']:
+            if 'job_state_summary' in serialization_params['keys']:
+                query = query.options(eagerload('job_state_summary'))
+
+        return {row.id: row for row in query.all()}
 
 
 class HistoryContentsSerializer(base.ModelSerializer, deletable.PurgableSerializerMixin):
@@ -376,7 +427,7 @@ class HistoryContentsSerializer(base.ModelSerializer, deletable.PurgableSerializ
     model_manager_class = HistoryContentsManager
 
     def __init__(self, app, **kwargs):
-        super(HistoryContentsSerializer, self).__init__(app, **kwargs)
+        super().__init__(app, **kwargs)
 
         self.default_view = 'summary'
         self.add_view('summary', [
@@ -398,7 +449,7 @@ class HistoryContentsSerializer(base.ModelSerializer, deletable.PurgableSerializ
 
     # assumes: outgoing to json.dumps and sanitized
     def add_serializers(self):
-        super(HistoryContentsSerializer, self).add_serializers()
+        super().add_serializers()
         deletable.PurgableSerializerMixin.add_serializers(self)
 
         self.serializers.update({
@@ -415,62 +466,69 @@ class HistoryContentsSerializer(base.ModelSerializer, deletable.PurgableSerializ
         return self.serialize_id(content, key, **context)
 
 
-class HistoryContentsFilters(base.ModelFilterParser, deletable.PurgableFiltersMixin):
+class HistoryContentsFilters(base.ModelFilterParser,
+                             annotatable.AnnotatableFilterMixin,
+                             deletable.PurgableFiltersMixin,
+                             taggable.TaggableFilterMixin,
+                             tools.ToolFilterMixin):
     # surprisingly (but ominously), this works for both content classes in the union that's filtered
     model_class = model.HistoryDatasetAssociation
+    subcontainer_model_class = model.HistoryDatasetCollectionAssociation
 
-    # TODO: history_content_type filter doesn't work with psycopg2: column does not exist (even with hybrid props)
     def _parse_orm_filter(self, attr, op, val):
-
-        def raise_filter_err(attr, op, val, msg):
-            raise glx_exceptions.RequestParameterInvalidException(msg, column=attr, operation=op, val=val)
 
         # we need to use some manual/text/column fu here since some where clauses on the union don't work
         # using the model_class defined above - they need to be wrapped in their own .column()
         # (and some of these are *not* a normal columns (especially 'state') anyway)
         # TODO: genericize these - can probably extract a _get_column( attr, ... ) or something
         # special cases...special cases everywhere
-        if attr == 'history_content_type' and op == 'eq':
-            if val == 'dataset':
-                return sql.column('history_content_type') == 'dataset'
-            if val == 'dataset_collection':
-                return sql.column('history_content_type') == 'dataset_collection'
-            raise_filter_err(attr, op, val, 'bad op in filter')
+        def get_filter(attr, op, val):
+            if attr == 'history_content_type' and op == 'eq':
+                if val in ('dataset', 'dataset_collection'):
+                    return sql.column('history_content_type') == val
+                self.raise_filter_err(attr, op, val, 'bad op in filter')
 
-        if attr == 'type_id':
-            if op == 'eq':
-                return sql.column('type_id') == val
-            if op == 'in':
-                return sql.column('type_id').in_(self.parse_type_id_list(val))
-            raise_filter_err(attr, op, val, 'bad op in filter')
+            if attr == 'type_id':
+                if op == 'eq':
+                    return sql.column('type_id') == val
+                if op == 'in':
+                    return sql.column('type_id').in_(self.parse_type_id_list(val))
+                self.raise_filter_err(attr, op, val, 'bad op in filter')
 
-        if attr in ('update_time', 'create_time'):
-            if op == 'ge':
-                return sql.column(attr) >= self.parse_date(val)
-            if op == 'le':
-                return sql.column(attr) <= self.parse_date(val)
-            raise_filter_err(attr, op, val, 'bad op in filter')
+            if attr in ('update_time', 'create_time'):
+                if op == 'ge':
+                    return sql.column(attr) >= self.parse_date(val)
+                if op == 'le':
+                    return sql.column(attr) <= self.parse_date(val)
+                if op == 'gt':
+                    return sql.column(attr) > self.parse_date(val)
+                if op == 'lt':
+                    return sql.column(attr) < self.parse_date(val)
+                self.raise_filter_err(attr, op, val, 'bad op in filter')
 
-        if attr == 'state':
-            valid_states = model.Dataset.states.values()
-            if op == 'eq':
-                if val not in valid_states:
-                    raise_filter_err(attr, op, val, 'invalid state in filter')
-                return sql.column('state') == val
-            if op == 'in':
-                states = [s for s in val.split(',') if s]
-                for state in states:
-                    if state not in valid_states:
-                        raise_filter_err(attr, op, state, 'invalid state in filter')
-                return sql.column('state').in_(states)
-            raise_filter_err(attr, op, val, 'bad op in filter')
+            if attr == 'state':
+                valid_states = model.Dataset.states.values()
+                if op == 'eq':
+                    if val not in valid_states:
+                        self.raise_filter_err(attr, op, val, 'invalid state in filter')
+                    return sql.column('state') == val
+                if op == 'in':
+                    states = [s for s in val.split(',') if s]
+                    for state in states:
+                        if state not in valid_states:
+                            self.raise_filter_err(attr, op, state, 'invalid state in filter')
+                    return sql.column('state').in_(states)
+                self.raise_filter_err(attr, op, val, 'bad op in filter')
 
-        return super(HistoryContentsFilters, self)._parse_orm_filter(attr, op, val)
+        column_filter = get_filter(attr, op, val)
+        if column_filter is not None:
+            return self.parsed_filter(filter_type='orm', filter=column_filter)
+        return super()._parse_orm_filter(attr, op, val)
 
     def decode_type_id(self, type_id):
         TYPE_ID_SEP = '-'
         split = type_id.split(TYPE_ID_SEP, 1)
-        return TYPE_ID_SEP.join([split[0], str(self.app.security.decode_id(split[1]))])
+        return TYPE_ID_SEP.join((split[0], str(self.app.security.decode_id(split[1]))))
 
     def parse_type_id_list(self, type_id_list_string, sep=','):
         """
@@ -479,8 +537,11 @@ class HistoryContentsFilters(base.ModelFilterParser, deletable.PurgableFiltersMi
         return [self.decode_type_id(type_id) for type_id in type_id_list_string.split(sep)]
 
     def _add_parsers(self):
-        super(HistoryContentsFilters, self)._add_parsers()
+        super()._add_parsers()
+        annotatable.AnnotatableFilterMixin._add_parsers(self)
         deletable.PurgableFiltersMixin._add_parsers(self)
+        taggable.TaggableFilterMixin._add_parsers(self)
+        tools.ToolFilterMixin._add_parsers(self)
         self.orm_filter_parsers.update({
             'history_content_type' : {'op': ('eq')},
             'type_id'       : {'op': ('eq', 'in'), 'val': self.parse_type_id_list},
@@ -490,6 +551,6 @@ class HistoryContentsFilters(base.ModelFilterParser, deletable.PurgableFiltersMi
             'name'          : {'op': ('eq', 'contains', 'like')},
             'state'         : {'op': ('eq', 'in')},
             'visible'       : {'op': ('eq'), 'val': self.parse_bool},
-            'create_time'   : {'op': ('le', 'ge'), 'val': self.parse_date},
-            'update_time'   : {'op': ('le', 'ge'), 'val': self.parse_date},
+            'create_time'   : {'op': ('le', 'ge', 'lt', 'gt'), 'val': self.parse_date},
+            'update_time'   : {'op': ('le', 'ge', 'lt', 'gt'), 'val': self.parse_date},
         })

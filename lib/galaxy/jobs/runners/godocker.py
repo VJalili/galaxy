@@ -10,6 +10,7 @@ from galaxy.jobs.runners import (
     AsynchronousJobRunner,
     AsynchronousJobState
 )
+from galaxy.util import unicodify
 
 
 log = logging.getLogger(__name__)
@@ -17,7 +18,7 @@ log = logging.getLogger(__name__)
 __all__ = ('GodockerJobRunner', )
 
 
-class Godocker(object):
+class Godocker:
     """
     API parameters
     """
@@ -129,7 +130,7 @@ class GodockerJobRunner(AsynchronousJobRunner):
         kwargs['runner_param_specs'].update(runner_param_specs)
 
         # Start the job runner parent object
-        super(GodockerJobRunner, self).__init__(app, nworkers, **kwargs)
+        super().__init__(app, nworkers, **kwargs)
 
         # godocker API login call
         self.auth = self.login(self.runner_params["key"], self.runner_params["user"], self.runner_params["godocker_master"])
@@ -252,13 +253,13 @@ class GodockerJobRunner(AsynchronousJobRunner):
         job_wrapper.command_line = job.command_line
         ajs.job_wrapper = job_wrapper
         if job.state == model.Job.states.RUNNING:
-            log.debug("(%s/%s) is still in running state, adding to the god queue" % (job.id, job.get_job_runner_external_id()))
+            log.debug("({}/{}) is still in running state, adding to the god queue".format(job.id, job.get_job_runner_external_id()))
             ajs.old_state = 'R'
             ajs.running = True
             self.monitor_queue.put(ajs)
 
         elif job.state == model.Job.states.QUEUED:
-            log.debug("(%s/%s) is still in god queued state, adding to the god queue" % (job.id, job.get_job_runner_external_id()))
+            log.debug("({}/{}) is still in god queued state, adding to the god queue".format(job.id, job.get_job_runner_external_id()))
             ajs.old_state = 'Q'
             ajs.running = False
             self.monitor_queue.put(ajs)
@@ -278,14 +279,14 @@ class GodockerJobRunner(AsynchronousJobRunner):
             god_error_file = path + "/god.err"
             try:
                 # Read from GoDocker output_file and write it into galaxy output_file.
-                f = open(god_output_file, "r")
+                f = open(god_output_file)
                 out_log = f.read()
                 log_file = open(job_state.output_file, "w")
                 log_file.write(out_log)
                 log_file.close()
                 f.close()
                 # Read from GoDocker error_file and write it into galaxy error_file.
-                f = open(god_error_file, "r")
+                f = open(god_error_file)
                 out_log = f.read()
                 log_file = open(job_state.error_file, "w")
                 log_file.write(out_log)
@@ -297,11 +298,11 @@ class GodockerJobRunner(AsynchronousJobRunner):
                 log_file.write(out_log)
                 log_file.close()
                 f.close()
-                log.debug("CREATE OUTPUT FILE: " + str(job_state.output_file))
-                log.debug("CREATE ERROR FILE: " + str(job_state.error_file))
-                log.debug("CREATE EXIT CODE FILE: " + str(job_state.exit_code_file))
-            except IOError as e:
-                log.error('Could not access task log file %s' % str(e))
+                log.debug("CREATE OUTPUT FILE: " + job_state.output_file)
+                log.debug("CREATE ERROR FILE: " + job_state.error_file)
+                log.debug("CREATE EXIT CODE FILE: " + job_state.exit_code_file)
+            except OSError as e:
+                log.error('Could not access task log file: %s', unicodify(e))
                 log.debug("IO Error occurred when accessing the files.")
                 return False
         return True

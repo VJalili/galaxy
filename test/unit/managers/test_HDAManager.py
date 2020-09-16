@@ -638,7 +638,7 @@ class HDAFilterParserTestCase(HDATestCase):
         self.log('the following filters should be parsable')
         # base
         self.assertORMFilter(self.filter_parser.parse_filter('id', 'in', [1, 2]))
-        encoded_id_string = ','.join([self.app.security.encode_id(id_) for id_ in [1, 2]])
+        encoded_id_string = ','.join(self.app.security.encode_id(id_) for id_ in [1, 2])
         self.assertORMFilter(self.filter_parser.parse_filter('encoded_id', 'in', encoded_id_string))
         self.assertORMFilter(self.filter_parser.parse_filter('create_time', 'le', '2015-03-15'))
         self.assertORMFilter(self.filter_parser.parse_filter('create_time', 'ge', '2015-03-15'))
@@ -654,13 +654,15 @@ class HDAFilterParserTestCase(HDATestCase):
         self.assertORMFilter(self.filter_parser.parse_filter('state', 'eq', 'ok'))
         self.assertORMFilter(self.filter_parser.parse_filter('state', 'in', ['queued', 'running']))
         self.assertORMFilter(self.filter_parser.parse_filter('visible', 'eq', True))
+        # taggable
+        self.assertORMFunctionFilter(self.filter_parser.parse_filter('tag', 'eq', 'wot'))
+        self.assertORMFunctionFilter(self.filter_parser.parse_filter('tag', 'has', 'wot'))
+        # genomebuild
         self.assertFnFilter(self.filter_parser.parse_filter('genome_build', 'eq', 'wot'))
         self.assertFnFilter(self.filter_parser.parse_filter('genome_build', 'contains', 'wot'))
+        # data_type
         self.assertFnFilter(self.filter_parser.parse_filter('data_type', 'eq', 'wot'))
         self.assertFnFilter(self.filter_parser.parse_filter('data_type', 'isinstance', 'wot'))
-        # taggable
-        self.assertFnFilter(self.filter_parser.parse_filter('tag', 'eq', 'wot'))
-        self.assertFnFilter(self.filter_parser.parse_filter('tag', 'has', 'wot'))
         # annotatable
         self.assertFnFilter(self.filter_parser.parse_filter('annotation', 'has', 'wot'))
 

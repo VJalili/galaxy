@@ -4,15 +4,37 @@ import logging
 import os
 import time
 
-from sqlalchemy import and_, Boolean, Column, DateTime, false, ForeignKey, Integer, MetaData, not_, Numeric, Table, TEXT, true
-from sqlalchemy.orm import backref, mapper, relation, scoped_session, sessionmaker
+from sqlalchemy import (
+    and_,
+    Boolean,
+    Column,
+    DateTime,
+    false,
+    ForeignKey,
+    Integer,
+    MetaData,
+    not_,
+    Numeric,
+    Table,
+    TEXT,
+    true
+)
+from sqlalchemy.orm import (
+    backref,
+    mapper,
+    relation,
+    scoped_session,
+    sessionmaker
+)
 
-from galaxy.model.custom_types import MetadataType, TrimmedString
+from galaxy.model.custom_types import (
+    MetadataType,
+    TrimmedString
+)
 from galaxy.model.metadata import MetadataCollection
 from galaxy.util.bunch import Bunch
 
 log = logging.getLogger(__name__)
-log.setLevel(logging.DEBUG)
 now = datetime.datetime.utcnow
 metadata = MetaData()
 context = scoped_session(sessionmaker(autoflush=False, autocommit=True))
@@ -37,7 +59,7 @@ def directory_hash_id(id):
     return [padded[i * 3:(i + 1) * 3] for i in range(len(padded) // 3)]
 
 
-class Dataset(object):
+class Dataset:
     states = Bunch(NEW='new',
                    UPLOAD='upload',
                    QUEUED='queued',
@@ -133,10 +155,10 @@ class Dataset(object):
         try:
             os.remove(self.data.file_name)
         except OSError as e:
-            log.critical('%s delete error %s' % (self.__class__.__name__, e))
+            log.critical('{} delete error {}'.format(self.__class__.__name__, e))
 
 
-class DatasetInstance(object):
+class DatasetInstance:
     """A base class for all 'dataset instances', HDAs, LDAs, etc"""
     states = Dataset.states
     permitted_actions = Dataset.permitted_actions
@@ -482,7 +504,7 @@ class LibraryDatasetDatasetAssociation(DatasetInstance):
         return template_list
 
 
-class LibraryDataset(object):
+class LibraryDataset:
     # This class acts as a proxy to the currently selected LDDA
     def __init__(self, folder=None, order_id=None, name=None, info=None, library_dataset_dataset_association=None, **kwd):
         self.folder = folder
@@ -690,7 +712,9 @@ def __guess_dataset_by_filename(filename):
 
 
 def upgrade(migrate_engine):
+    print(__doc__)
     metadata.bind = migrate_engine
+
     log.debug("Fixing a discrepancy concerning deleted shared history items.")
     affected_items = 0
     start_time = time.time()
@@ -726,7 +750,7 @@ def upgrade(migrate_engine):
                 changed_associations += 1
             # mark original Dataset as deleted and purged, it is no longer in use, but do not delete file_name contents
             dataset.deleted = True
-            dataset.external_filename = "Dataset was result of share before HDA, and has been replaced: %s mapped to Dataset %s" % (dataset.external_filename, guessed_dataset.id)
+            dataset.external_filename = "Dataset was result of share before HDA, and has been replaced: {} mapped to Dataset {}".format(dataset.external_filename, guessed_dataset.id)
             dataset.purged = True  # we don't really purge the file here, but we mark it as purged, since this dataset is now defunct
     context.flush()
     log.debug("%i items affected, and restored." % (changed_associations))
@@ -734,5 +758,4 @@ def upgrade(migrate_engine):
 
 
 def downgrade(migrate_engine):
-    metadata.bind = migrate_engine
-    log.debug("Downgrade is not possible.")
+    pass

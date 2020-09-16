@@ -2,13 +2,13 @@
 
 import os
 
-from base import integration_util  # noqa: I202
-from base.populators import (
+from galaxy_test.base.populators import (
     DatasetPopulator,
 )
+from galaxy_test.driver import integration_util
 
 SCRIPT_DIRECTORY = os.path.abspath(os.path.dirname(__file__))
-DELAY_JOB_CONFIG_FILE = os.path.join(SCRIPT_DIRECTORY, "delay_job_conf.xml")
+DELAY_JOB_CONFIG_FILE = os.path.join(SCRIPT_DIRECTORY, "delay_job_conf.yml")
 SIMPLE_JOB_CONFIG_FILE = os.path.join(SCRIPT_DIRECTORY, "simple_job_conf.xml")
 
 

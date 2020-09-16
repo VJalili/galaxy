@@ -5,8 +5,8 @@ import logging
 
 from galaxy import exceptions
 from galaxy.managers import hdas, histories
-from galaxy.web import _future_expose_api as expose_api
-from galaxy.web.base.controller import BaseAPIController
+from galaxy.web import expose_api
+from galaxy.webapps.base.controller import BaseAPIController
 
 log = logging.getLogger(__name__)
 
@@ -17,7 +17,7 @@ class PluginsController(BaseAPIController):
     """
 
     def __init__(self, app):
-        super(PluginsController, self).__init__(app)
+        super().__init__(app)
         self.hda_manager = hdas.HDAManager(app)
         self.history_manager = histories.HistoryManager(app)
 

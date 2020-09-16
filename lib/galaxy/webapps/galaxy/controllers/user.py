@@ -7,23 +7,26 @@ from datetime import datetime, timedelta
 
 from markupsafe import escape
 from six.moves.urllib.parse import unquote
-from sqlalchemy import or_
+from sqlalchemy import (
+    func,
+    or_
+)
 from sqlalchemy.orm.exc import NoResultFound
 
 from galaxy import (
     util,
     web
 )
+from galaxy.exceptions import Conflict
 from galaxy.managers import users
 from galaxy.queue_worker import send_local_control_task
 from galaxy.security.validate_user_input import (
     validate_email,
-    validate_password,
     validate_publicname
 )
-from galaxy.web import _future_expose_api_anonymous_and_sessionless as expose_api_anonymous_and_sessionless
+from galaxy.web import expose_api_anonymous_and_sessionless
 from galaxy.web import url_for
-from galaxy.web.base.controller import (
+from galaxy.webapps.base.controller import (
     BaseUIController,
     CreatesApiKeysMixin,
     UsesFormDefinitionsMixin
@@ -32,125 +35,33 @@ from galaxy.web.base.controller import (
 log = logging.getLogger(__name__)
 
 
+def _filtered_registration_params_dict(payload):
+    return {k: v for (k, v) in payload.items() if k in ['email', 'username', 'password', 'confirm', 'subscribe']}
+
+
 class User(BaseUIController, UsesFormDefinitionsMixin, CreatesApiKeysMixin):
     installed_len_files = None
 
-    @web.expose
-    def openid_auth( self, trans, **kwd ):
-        '''Handles user request to access an OpenID provider'''
-        if not trans.app.config.enable_openid:
-            return trans.show_error_message( 'OpenID authentication is not enabled in this instance of Galaxy' )
-        message = 'Unspecified failure authenticating via OpenID'
-        auto_associate = util.string_as_bool( kwd.get( 'auto_associate', False ) )
-        use_panels = util.string_as_bool( kwd.get( 'use_panels', False ) )
-        consumer = trans.app.openid_manager.get_consumer( trans )
-        openid_url = kwd.get('openid_url', '')
-        openid_provider = kwd.get('openid_provider', '')
-        if openid_url:
-            openid_provider_obj = trans.app.openid_providers.new_provider_from_identifier( openid_url )
-        elif openid_provider:
-            openid_provider_obj = trans.app.openid_providers.get(openid_provider)
-        else:
-            message = 'An OpenID provider was not specified'
-        redirect = kwd.get('redirect', '').strip()
-        if not redirect:
-            redirect = ' '
-        if openid_provider_obj:
-            process_url = trans.request.base.rstrip( '/' ) + url_for( controller='user', action='openid_process', redirect=redirect, openid_provider=openid_provider, auto_associate=auto_associate )  # None of these values can be empty, or else a verification error will occur
-            request = None
-            try:
-                request = consumer.begin( openid_provider_obj.op_endpoint_url )
-                if request is None:
-                    message = 'No OpenID services are available at %s' % openid_provider_obj.op_endpoint_url
-            except Exception as e:
-                message = 'Failed to begin OpenID authentication: %s' % str( e )
-            if request is not None:
-                trans.app.openid_manager.add_sreg( trans, request, required=openid_provider_obj.sreg_required, optional=openid_provider_obj.sreg_optional )
-                if request.shouldSendRedirect():
-                    redirect_url = request.redirectURL(
-                        trans.request.base, process_url )
-                    trans.app.openid_manager.persist_session( trans, consumer )
-                    return trans.response.send_redirect( redirect_url )
-                else:
-                    form = request.htmlMarkup( trans.request.base, process_url, form_tag_attrs={'id': 'openid_message', 'target': '_top'} )
-                    trans.app.openid_manager.persist_session( trans, consumer )
-                    return form
-        return trans.response.send_redirect( url_for(controller='user',
-                                                     action='login',
-                                                     redirect=redirect,
-                                                     use_panels=use_panels,
-                                                     message=message,
-                                                     status='error') )
+    def __init__(self, app):
+        super().__init__(app)
+        self.user_manager = users.UserManager(app)
 
-    @web.expose
-    def openid_process( self, trans, **kwd ):
-        '''Handle's response from OpenID Providers'''
-        if not trans.app.config.enable_openid:
-            return trans.show_error_message( 'OpenID authentication is not enabled in this instance of Galaxy' )
-        auto_associate = util.string_as_bool( kwd.get( 'auto_associate', False ) )
-        action = 'login'
-        if trans.user:
-            action = 'openid_manage'
-        if trans.app.config.support_url is not None:
-            contact = '<a href="%s">support</a>' % trans.app.config.support_url
-        else:
-            contact = 'support'
-        message = 'Verification failed for an unknown reason.  Please contact %s for assistance.' % ( contact )
-        status = 'error'
-        consumer = trans.app.openid_manager.get_consumer( trans )
-        info = consumer.complete( kwd, trans.request.url )
-        display_identifier = info.getDisplayIdentifier()
-        redirect = kwd.get( 'redirect', '' ).strip()
-        openid_provider = kwd.get( 'openid_provider', None )
-        if info.status == trans.app.openid_manager.FAILURE and display_identifier:
-            message = "Login via OpenID failed.  The technical reason for this follows, please include this message in your email if you need to %s to resolve this problem: %s" % ( contact, info.message )
-            return trans.response.send_redirect( url_for( controller='user',
-                                                          action=action,
-                                                          use_panels=True,
-                                                          redirect=redirect,
-                                                          message=message,
-                                                          status='error' ) )
-        elif info.status == trans.app.openid_manager.SUCCESS:
-            if info.endpoint.canonicalID:
-                display_identifier = info.endpoint.canonicalID
-            openid_provider_obj = trans.app.openid_providers.get( openid_provider )
-            user_openid = trans.sa_session.query( trans.app.model.UserOpenID ).filter( trans.app.model.UserOpenID.table.c.openid == display_identifier ).first()
-            if not openid_provider_obj and user_openid and user_openid.provider:
-                openid_provider_obj = trans.app.openid_providers.get( user_openid.provider )
-            if not openid_provider_obj:
-                openid_provider_obj = trans.app.openid_providers.new_provider_from_identifier( display_identifier )
-            if not user_openid:
-                user_openid = trans.app.model.UserOpenID( session=trans.galaxy_session, openid=display_identifier )
-            if not user_openid.user:
-                user_openid.session = trans.galaxy_session
-            if not user_openid.provider and openid_provider:
-                user_openid.provider = openid_provider
-            if trans.user:
-                if user_openid.user and user_openid.user.id != trans.user.id:
-                    message = "The OpenID <strong>%s</strong> is already associated with another Galaxy account, <strong>%s</strong>.  Please disassociate it from that account before attempting to associate it with a new account." % ( escape( display_identifier ), escape( user_openid.user.email ) )
-                if not trans.user.active and trans.app.config.user_activation_on:  # Account activation is ON and the user is INACTIVE.
-                    if ( trans.app.config.activation_grace_period != 0 ):  # grace period is ON
-                        if self.is_outside_grace_period( trans, trans.user.create_time ):  # User is outside the grace period. Login is disabled and he will have the activation email resent.
-                            message, status = self.resend_verification_email( trans, trans.user.email, trans.user.username )
-                        else:  # User is within the grace period, let him log in.
-                            pass
-                    else:  # Grace period is off. Login is disabled and user will have the activation email resent.
-                        message, status = self.resend_verification_email( trans, trans.user.email, trans.user.username )
-                elif not user_openid.user or user_openid.user == trans.user:
-                    if openid_provider_obj.id:
-                        user_openid.provider = openid_provider_obj.id
-                    user_openid.session = trans.galaxy_session
-                    if not openid_provider_obj.never_associate_with_user:
-                        if not auto_associate and ( user_openid.user and user_openid.user.id == trans.user.id ):
-                            message = "The OpenID <strong>%s</strong> is already associated with your Galaxy account, <strong>%s</strong>." % ( escape( display_identifier ), escape( trans.user.email ) )
-                            status = "warning"
-                        else:
-                            message = "The OpenID <strong>%s</strong> has been associated with your Galaxy account, <strong>%s</strong>." % ( escape( display_identifier ), escape( trans.user.email ) )
-                            status = "done"
-                        user_openid.user = trans.user
-                        trans.sa_session.add( user_openid )
-                        trans.sa_session.flush()
-                        trans.log_event( "User associated OpenID: %s" % display_identifier )
+    def __handle_role_and_group_auto_creation(self, trans, user, roles, auto_create_roles=False,
+                                              auto_create_groups=False, auto_assign_roles_to_groups_only=False):
+        for role_name in roles:
+            role = None
+            group = None
+            if auto_create_roles:
+                try:
+                    # first try to find the role
+                    role = trans.app.security_agent.get_role(role_name)
+                except NoResultFound:
+                    # or create it
+                    role, num_in_groups = trans.app.security_agent.create_role(
+                        role_name, "Auto created upon user registration", [], [],
+                        create_group_for_role=auto_create_groups)
+                    if auto_create_groups:
+                        trans.log_event("Created role and group for auto-registered user.")
                     else:
                         trans.log_event("Created role for auto-registered user.")
             if auto_create_groups:
@@ -170,40 +81,41 @@ class User(BaseUIController, UsesFormDefinitionsMixin, CreatesApiKeysMixin):
                 trans.log_event("Assigning role to newly created user")
                 trans.app.security_agent.associate_user_role(user, role)
 
-    def __autoregistration(self, trans, login, password, status, kwd, no_password_check=False, cntrller=None):
+    def __autoregistration(self, trans, login, password):
         """
         Does the autoregistration if enabled. Returns a message
         """
-        autoreg = trans.app.auth_manager.check_auto_registration(trans, login, password, no_password_check=no_password_check)
+        try:
+            autoreg = trans.app.auth_manager.check_auto_registration(trans, login, password)
+        except Conflict as conflict:
+            return "Auto-registration failed, {}".format(conflict), None
         user = None
-        success = False
         if autoreg["auto_reg"]:
-            kwd["email"] = autoreg["email"]
-            kwd["username"] = autoreg["username"]
-            message = " ".join([validate_email(trans, kwd["email"], allow_empty=True),
-                                validate_publicname(trans, kwd["username"])]).rstrip()
+            email = autoreg["email"]
+            username = autoreg["username"]
+            message = " ".join((validate_email(trans, email, allow_empty=True),
+                                validate_publicname(trans, username))).rstrip()
             if not message:
-                message, status, user, success = self.__register(trans, **kwd)
-                if success:
-                    # The handle_user_login() method has a call to the history_set_default_permissions() method
-                    # (needed when logging in with a history), user needs to have default permissions set before logging in
-                    if not trans.user_is_admin:
-                        trans.handle_user_login(user)
-                        trans.log_event("User (auto) created a new account")
-                        trans.log_event("User logged in")
-                    if "attributes" in autoreg and "roles" in autoreg["attributes"]:
-                        self.__handle_role_and_group_auto_creation(
-                            trans, user, autoreg["attributes"]["roles"],
-                            auto_create_groups=autoreg["auto_create_groups"],
-                            auto_create_roles=autoreg["auto_create_roles"],
-                            auto_assign_roles_to_groups_only=autoreg["auto_assign_roles_to_groups_only"])
-                else:
-                    message = "Auto-registration failed, contact your local Galaxy administrator. %s" % message
+                user = self.user_manager.create(email=email, username=username, password="")
+                if trans.app.config.user_activation_on:
+                    self.user_manager.send_activation_email(trans, email, username)
+                # The handle_user_login() method has a call to the history_set_default_permissions() method
+                # (needed when logging in with a history), user needs to have default permissions set before logging in
+                if not trans.user_is_admin:
+                    trans.handle_user_login(user)
+                    trans.log_event("User (auto) created a new account")
+                    trans.log_event("User logged in")
+                if "attributes" in autoreg and "roles" in autoreg["attributes"]:
+                    self.__handle_role_and_group_auto_creation(
+                        trans, user, autoreg["attributes"]["roles"],
+                        auto_create_groups=autoreg["auto_create_groups"],
+                        auto_create_roles=autoreg["auto_create_roles"],
+                        auto_assign_roles_to_groups_only=autoreg["auto_assign_roles_to_groups_only"])
             else:
                 message = "Auto-registration failed, contact your local Galaxy administrator. %s" % message
         else:
             message = "No such user or invalid password."
-        return message, status, user, success
+        return message, user
 
     @expose_api_anonymous_and_sessionless
     def login(self, trans, payload={}, **kwd):
@@ -226,10 +138,14 @@ class User(BaseUIController, UsesFormDefinitionsMixin, CreatesApiKeysMixin):
             trans.app.model.User.table.c.email == login,
             trans.app.model.User.table.c.username == login
         )).first()
+        if not user and login.lower() != login:
+            user = trans.sa_session.query(trans.app.model.User).filter(
+                func.lower(trans.app.model.User.table.c.email) == login.lower()
+            ).first()
         log.debug("trans.app.config.auth_config_file: %s" % trans.app.config.auth_config_file)
         if user is None:
-            message, status, user, success = self.__autoregistration(trans, login, password, status, kwd)
-            if not success:
+            message, user = self.__autoregistration(trans, login, password)
+            if message:
                 return self.message_exception(trans, message)
         elif user.deleted:
             message = "This account has been marked deleted, contact your local Galaxy administrator to restore the account."
@@ -273,7 +189,7 @@ class User(BaseUIController, UsesFormDefinitionsMixin, CreatesApiKeysMixin):
         Exposed function for use outside of the class. E.g. when user click on the resend link in the masthead.
         """
         message, status = self.resend_activation_email(trans, None, None)
-        if status == 'done':
+        if status:
             return trans.show_ok_message(message)
         else:
             return trans.show_error_message(message)
@@ -283,19 +199,19 @@ class User(BaseUIController, UsesFormDefinitionsMixin, CreatesApiKeysMixin):
         Function resends the verification email in case user wants to log in with an inactive account or he clicks the resend link.
         """
         if email is None:  # User is coming from outside registration form, load email from trans
+            if not trans.user:
+                trans.show_error_message("No session found, cannot send activation email.")
             email = trans.user.email
         if username is None:  # User is coming from outside registration form, load email from trans
             username = trans.user.username
         is_activation_sent = self.user_manager.send_activation_email(trans, email, username)
         if is_activation_sent:
-            message = 'This account has not been activated yet. The activation link has been sent again. Please check your email address <b>%s</b> including the spam/trash folder.<br><a target="_top" href="%s">Return to the home page</a>.' % (escape(email), url_for('/'))
-            status = 'error'
+            message = 'This account has not been activated yet. The activation link has been sent again. Please check your email address <b>{}</b> including the spam/trash folder. <a target="_top" href="{}">Return to the home page</a>.'.format(escape(email), url_for('/'))
         else:
-            message = 'This account has not been activated yet but we are unable to send the activation link. Please contact your local Galaxy administrator.<br><a target="_top" href="%s">Return to the home page</a>.' % url_for('/')
-            status = 'error'
+            message = 'This account has not been activated yet but we are unable to send the activation link. Please contact your local Galaxy administrator. <a target="_top" href="%s">Return to the home page</a>.' % url_for('/')
             if trans.app.config.error_email_to is not None:
-                message += '<br>Error contact: %s' % trans.app.config.error_email_to
-        return message, status
+                message += ' Error contact: %s.' % trans.app.config.error_email_to
+        return message, is_activation_sent
 
     def is_outside_grace_period(self, trans, create_time):
         """
@@ -317,10 +233,11 @@ class User(BaseUIController, UsesFormDefinitionsMixin, CreatesApiKeysMixin):
             # while sometimes, so we don't want to block on logout.
             send_local_control_task(trans.app,
                                     "recalculate_user_disk_usage",
-                                    {"user_id": trans.security.encode_id(trans.user.id)})
+                                    kwargs={"user_id": trans.security.encode_id(trans.user.id)})
         # Since logging an event requires a session, we'll log prior to ending the session
         trans.log_event("User logged out")
         trans.handle_user_logout(logout_all=logout_all)
+        return {"message": "Success."}
 
     @expose_api_anonymous_and_sessionless
     def create(self, trans, payload={}, **kwd):
@@ -329,7 +246,7 @@ class User(BaseUIController, UsesFormDefinitionsMixin, CreatesApiKeysMixin):
         message = trans.check_csrf_token(payload)
         if message:
             return self.message_exception(trans, message)
-        user, message = self.user_manager.register(trans, **payload)
+        user, message = self.user_manager.register(trans, **_filtered_registration_params_dict(payload))
         if message:
             return self.message_exception(trans, message, sanitize=False)
         elif user and not trans.user_is_admin:
@@ -363,9 +280,7 @@ class User(BaseUIController, UsesFormDefinitionsMixin, CreatesApiKeysMixin):
                 return trans.show_ok_message("Your account is already active. Nothing has changed. <br><a href='%s'>Go to login page.</a>") % web.url_for(controller='root', action='index')
             if user.activation_token == activation_token:
                 user.activation_token = None
-                user.active = True
-                trans.sa_session.add(user)
-                trans.sa_session.flush()
+                self.user_manager.activate(user)
                 return trans.show_ok_message("Your account has been successfully activated! <br><a href='%s'>Go to login page.</a>") % web.url_for(controller='root', action='index')
             else:
                 #  Tokens don't match. Activation is denied.
@@ -398,12 +313,6 @@ class User(BaseUIController, UsesFormDefinitionsMixin, CreatesApiKeysMixin):
         if message:
             return self.message_exception(trans, message)
         return {"message": "Reset link has been sent to your email."}
-
-    def __validate(self, trans, email, password, confirm, username):
-        message = "\n".join([validate_email(trans, email),
-                             validate_password(trans, password, confirm),
-                             validate_publicname(trans, username)]).rstrip()
-        return message
 
     def __get_redirect_url(self, redirect):
         if not redirect or redirect == "None":

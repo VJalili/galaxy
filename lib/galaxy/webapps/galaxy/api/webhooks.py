@@ -4,16 +4,15 @@ API Controller providing Galaxy Webhooks
 import imp
 import logging
 
-from galaxy.web import _future_expose_api_anonymous_and_sessionless as \
-    expose_api_anonymous_and_sessionless
-from galaxy.web.base.controller import BaseAPIController
+from galaxy.web import expose_api_anonymous_and_sessionless
+from galaxy.webapps.base.controller import BaseAPIController
 
 log = logging.getLogger(__name__)
 
 
 class WebhooksController(BaseAPIController):
     def __init__(self, app):
-        super(WebhooksController, self).__init__(app)
+        super().__init__(app)
 
     @expose_api_anonymous_and_sessionless
     def all_webhooks(self, trans, **kwd):

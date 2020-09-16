@@ -8,7 +8,10 @@ from galaxy.datatypes.data import get_file_peek, Text
 from galaxy.datatypes.metadata import MetadataElement
 from galaxy.datatypes.sniff import build_sniff_from_prefix
 from galaxy.datatypes.util import generic_util
-from galaxy.util import nice_size
+from galaxy.util import (
+    nice_size,
+    unicodify,
+)
 
 log = logging.getLogger(__name__)
 
@@ -54,7 +57,7 @@ class InfernalCM(Text):
         Set the number of models and the version of CM file in dataset.
         """
         dataset.metadata.number_of_models = generic_util.count_special_lines('^INFERNAL', dataset.file_name)
-        with open(dataset.file_name, 'r') as f:
+        with open(dataset.file_name) as f:
             first_line = f.readline()
             if first_line.startswith("INFERNAL"):
                 dataset.metadata.cm_version = (first_line.split()[0]).replace('INFERNAL', '')
@@ -214,7 +217,7 @@ class Stockholm_1_0(Text):
             if stockholm_lines_accumulated:
                 _write_part_stockholm_file(stockholm_lines_accumulated)
         except Exception as e:
-            log.error('Unable to split files: %s' % str(e))
+            log.error('Unable to split files: %s', unicodify(e))
             raise
     split = classmethod(split)
 

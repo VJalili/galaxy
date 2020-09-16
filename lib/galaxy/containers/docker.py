@@ -1,7 +1,6 @@
 """
 Interface to Docker
 """
-from __future__ import absolute_import
 
 import logging
 import os
@@ -19,7 +18,6 @@ try:
 except ImportError:
     ConnectionError = None
     ReadTimeout = None
-from six import string_types
 from six.moves import shlex_quote
 
 from galaxy.containers import ContainerInterface
@@ -61,9 +59,9 @@ class DockerInterface(ContainerInterface):
     )
 
     def validate_config(self):
-        super(DockerInterface, self).validate_config()
+        super().validate_config()
         self.__host_iter = None
-        if self._conf.host is None or isinstance(self._conf.host, string_types):
+        if self._conf.host is None or isinstance(self._conf.host, str):
             self.__host_iter = repeat(self._conf.host)
         else:
             self.__host_iter = cycle(self._conf.host)
@@ -99,7 +97,7 @@ class DockerInterface(ContainerInterface):
 
     @property
     def host(self):
-        return self.__host_iter.next()
+        return next(self.__host_iter)
 
     @property
     def host_iter(self):
@@ -128,7 +126,7 @@ class DockerCLIInterface(DockerInterface):
 
     def validate_config(self):
         log.warning('The `docker_cli` interface is deprecated and will be removed in Galaxy 18.09, please use `docker`')
-        super(DockerCLIInterface, self).validate_config()
+        super().validate_config()
         global_kwopts = []
         if self._conf.host:
             global_kwopts.append('--host')
@@ -159,7 +157,7 @@ class DockerCLIInterface(DockerInterface):
             l = val
         else:
             for hostvol, guestopts in val.items():
-                if isinstance(guestopts, string_types):
+                if isinstance(guestopts, str):
                     # {'/host/vol': '/container/vol'}
                     l.append('{}:{}'.format(hostvol, guestopts))
                 else:
@@ -219,7 +217,7 @@ class DockerCLIInterface(DockerInterface):
                 raise ContainerImageNotFound(msg, image=image)
 
 
-class DockerAPIClient(object):
+class DockerAPIClient:
     """Wraps a ``docker.APIClient`` to catch exceptions.
     """
 
@@ -255,7 +253,7 @@ class DockerAPIClient(object):
     def _init_client():
         kwargs = DockerAPIClient._client_kwargs.copy()
         if DockerAPIClient._host_iter is not None and 'base_url' not in kwargs:
-            kwargs['base_url'] = DockerAPIClient._host_iter.next()
+            kwargs['base_url'] = next(DockerAPIClient._host_iter)
         DockerAPIClient._client = docker.APIClient(*DockerAPIClient._client_args, **kwargs)
         log.info('Initialized Docker API client for server: %s', kwargs.get('base_url', 'localhost'))
 
@@ -347,7 +345,7 @@ class DockerAPIInterface(DockerInterface):
 
     def validate_config(self):
         assert docker is not None, "Docker module could not be imported, DockerAPIInterface unavailable"
-        super(DockerAPIInterface, self).validate_config()
+        super().validate_config()
         self.__client = None
 
     @property
@@ -501,7 +499,7 @@ class DockerAPIInterface(DockerInterface):
             map_spec = option_map[key]
             _kwopt_to_arg(map_spec, key, map_spec['default'])
         # don't allow kwopts that start with _, those are reserved for "child" object params
-        for kwopt in filter(lambda k: not k.startswith('_') and k in option_map, kwopts.keys()):
+        for kwopt in filter(lambda k: not k.startswith('_') and k in option_map, list(kwopts.keys())):
             map_spec = option_map[kwopt]
             _v = kwopts.pop(kwopt)
             _kwopt_to_arg(map_spec, kwopt, _v)

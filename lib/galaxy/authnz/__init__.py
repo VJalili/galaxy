@@ -10,12 +10,12 @@ credentials for cloud-based resource providers (e.g., Amazon AWS, Microsoft Azur
 """
 
 
-class IdentityProvider(object):
+class IdentityProvider:
     """
     OpenID Connect Identity Provider abstract interface.
     """
 
-    def __init__(self, provider, config):
+    def __init__(self, provider, config, backend_config):
         """
         Initialize the identity provider using the provided configuration,
         and raise a ParseError (or any more related specific exception) in
@@ -24,11 +24,17 @@ class IdentityProvider(object):
         :type provider: string
         :param provider: is the name of the identity provider (e.g., Google).
 
-        :type config: xml.etree.ElementTree.Element
+        :type config: lxml.etree.ElementTree._Element
         :param config: Is the configuration element of the provider
             from the configuration file (e.g., oidc_config.xml).
             This element contains the all the provider-specific
             configuration elements.
+
+        :type backend_config: lxml.etree.ElementTree._Element
+        :param backend_config: Is the configuration element of the backend of
+            the provider from the configuration file (e.g.,
+            oidc_backends_config.xml). This element contains all the
+            backend-specific configuration elements.
         """
         raise NotImplementedError()
 
@@ -58,11 +64,22 @@ class IdentityProvider(object):
             request a refresh token.
         :type trans: GalaxyWebTransaction
         :param trans: Galaxy web transaction.
-        :return boolean:
-            True: if callback is handled successfully.
-            False: if processing callback fails, then Galaxy attempts re-authentication.
+        :return tuple: a tuple of redirect_url and user.
         """
         raise NotImplementedError()
 
     def disconnect(self, provider, trans, disconnect_redirect_url=None):
+        raise NotImplementedError()
+
+    def logout(self, trans, post_logout_redirect_url=None):
+        """
+        Return a URL that will log the user out of the IDP. In OIDC this is
+        called the 'end_session_endpoint'.
+
+        :type trans: GalaxyWebTransaction
+        :param trans: Galaxy web transaction.
+
+        :type trans: string
+        :param trans: Optional URL to redirect to after logging out of IDP.
+        """
         raise NotImplementedError()

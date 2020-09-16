@@ -13,10 +13,10 @@ from galaxy.managers import (
     roles
 )
 from galaxy.web import (
-    _future_expose_api as expose_api,
-    _future_expose_api_anonymous as expose_api_anonymous
+    expose_api,
+    expose_api_anonymous,
 )
-from galaxy.web.base.controller import BaseAPIController
+from galaxy.webapps.base.controller import BaseAPIController
 
 log = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 class LibrariesController(BaseAPIController):
 
     def __init__(self, app):
-        super(LibrariesController, self).__init__(app)
+        super().__init__(app)
         self.folder_manager = folders.FolderManager()
         self.library_manager = libraries.LibraryManager()
         self.role_manager = roles.RoleManager(app)

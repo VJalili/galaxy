@@ -93,11 +93,12 @@ def _handle_resubmit_definitions(resubmit_definitions, app, job_runner, job_stat
 
         external_id = getattr(job_state, "job_id", None)
         if external_id:
-            job_log_prefix = "(%s/%s)" % (job_state.job_wrapper.job_id, job_state.job_id)
+            job_log_prefix = "({}/{})".format(job_state.job_wrapper.job_id, job_state.job_id)
         else:
             job_log_prefix = "(%s)" % (job_state.job_wrapper.job_id)
 
-        destination = resubmit['destination']
+        # Is destination needed here, might these be serialized to the database?
+        destination = resubmit.get('environment') or resubmit.get('destination')
         log.info("%s Job will be resubmitted to '%s' because %s at "
                  "the '%s' destination",
                  job_log_prefix,
@@ -152,7 +153,7 @@ def _handle_resubmit_definitions(resubmit_definitions, app, job_runner, job_stat
         return
 
 
-class _ExpressionContext(object):
+class _ExpressionContext:
 
     def __init__(self, job_state):
         self._job_state = job_state

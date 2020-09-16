@@ -42,6 +42,8 @@
             | ${self.galaxy_config['title']}
             %endif
         </title>
+        ## relative href for site root
+        <link rel="index" href="${ h.url_for( '/' ) }"/>
 
         ${self.stylesheets()}
         ${self.javascripts()}
@@ -51,7 +53,7 @@
 
     <body scroll="no" class="full-content">
         <div id="everything">
-            
+
             <div id="background"></div>
 
             %if self.galaxy_config['master']:
@@ -140,7 +142,7 @@
     <!-- galaxy.panels.mako stylesheets -->
 
     ## load default style
-    ${h.css("base")}
+    ${h.dist_css("base")}
 
     <style type="text/css">
 
@@ -173,23 +175,17 @@
 ## TODO: remove when all libs are required directly in modules
 <%def name="javascripts()">
     <!-- galaxy.panels.mako javascripts -->
-    ${h.js(
-        'libs/d3',
-        'bundled/libs.chunk',
-        'bundled/base.chunk'
+    ${h.dist_js(
+        'libs.chunk',
+        'base.chunk',
+        'generic.bundled'
     )}
-    ${self.javascript_entry()}
-</%def>
-
-<%def name="javascript_entry()">
-    <!-- galaxy.panels.mako javascript_entry -->
-    ${h.js('bundled/generic.bundled')}
 </%def>
 
 <%def name="javascript_app()">
     <!-- galaxy.panels.mako javascript_app -->
     <script type="text/javascript">
-    
+
         var galaxyConfig = ${ h.dumps( self.galaxy_config ) };
 
         ## TODO: Some visualizations (and more?) currently use this config, should be refactored.
@@ -224,7 +220,7 @@
     </script>
 
     ${ galaxy_client.load() }
-    ## ${ galaxy_client.config_sentry(app) }
+    ${ galaxy_client.config_sentry(app) }
 
 </%def>
 

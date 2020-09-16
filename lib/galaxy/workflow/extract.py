@@ -2,8 +2,10 @@
 histories.
 """
 import logging
+from collections import OrderedDict
 
 from galaxy import exceptions, model
+from galaxy.tool_util.parser import ToolOutputCollectionPart
 from galaxy.tools.parameters.basic import (
     DataCollectionToolParameter,
     DataToolParameter
@@ -13,8 +15,6 @@ from galaxy.tools.parameters.grouping import (
     Repeat,
     Section
 )
-from galaxy.tools.parser import ToolOutputCollectionPart
-from galaxy.util.odict import odict
 from .steps import (
     attach_ordered_steps,
     order_workflow_steps_with_levels
@@ -103,7 +103,7 @@ def extract_steps(trans, history=None, job_ids=None, dataset_ids=None, dataset_c
     # Tool steps
     for job_id in job_ids:
         if job_id not in summary.job_id2representative_job:
-            log.warning("job_id %s not found in job_id2representative_job %s" % (job_id, summary.job_id2representative_job))
+            log.warning("job_id {} not found in job_id2representative_job {}".format(job_id, summary.job_id2representative_job))
             raise AssertionError("Attempt to create workflow with job not connected to current history")
         job = summary.job_id2representative_job[job_id]
         tool_inputs, associations = step_inputs(trans, job)
@@ -141,7 +141,7 @@ def extract_steps(trans, history=None, job_ids=None, dataset_ids=None, dataset_c
                 hid = None
                 for implicit_pair in jobs[job]:
                     query_assoc_name, dataset_collection = implicit_pair
-                    if query_assoc_name == assoc_name:
+                    if query_assoc_name == assoc_name or assoc_name.startswith("__new_primary_file_%s|" % query_assoc_name):
                         hid = dataset_collection.hid
                 if hid is None:
                     template = "Failed to find matching implicit job - job id is %s, implicit pairs are %s, assoc_name is %s."
@@ -157,7 +157,7 @@ def extract_steps(trans, history=None, job_ids=None, dataset_ids=None, dataset_c
     return steps
 
 
-class FakeJob(object):
+class FakeJob:
     """
     Fake job object for datasets that have no creating_job_associations,
     they will be treated as "input" datasets.
@@ -168,7 +168,7 @@ class FakeJob(object):
         self.id = "fake_%s" % dataset.id
 
 
-class DatasetCollectionCreationJob(object):
+class DatasetCollectionCreationJob:
 
     def __init__(self, dataset_collection):
         self.is_fake = True
@@ -192,14 +192,14 @@ def summarize(trans, history=None):
     return summary.jobs, summary.warnings
 
 
-class WorkflowSummary(object):
+class WorkflowSummary:
 
     def __init__(self, trans, history):
         if not history:
             history = trans.get_history()
         self.history = history
         self.warnings = set()
-        self.jobs = odict()
+        self.jobs = OrderedDict()
         self.job_id2representative_job = {}  # map a non-fake job id to its representative job
         self.implicit_map_jobs = []
         self.collection_types = {}
@@ -365,10 +365,10 @@ def __cleanup_param_values(inputs, values):
                 if input.name in values:
                     group_values = values[input.name]
                     current_case = group_values['__current_case__']
-                    cleanup("%s%s|" % (prefix, key), input.cases[current_case].inputs, group_values)
+                    cleanup("{}{}|".format(prefix, key), input.cases[current_case].inputs, group_values)
             elif isinstance(input, Section):
                 if input.name in values:
-                    cleanup("%s%s|" % (prefix, key), input.inputs, values[input.name])
+                    cleanup("{}{}|".format(prefix, key), input.inputs, values[input.name])
     cleanup("", inputs, values)
     return associations
 

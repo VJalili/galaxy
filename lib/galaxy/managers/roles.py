@@ -8,6 +8,7 @@ from sqlalchemy.orm import exc as sqlalchemy_exceptions
 import galaxy.exceptions
 from galaxy import model
 from galaxy.managers import base
+from galaxy.util import unicodify
 
 log = logging.getLogger(__name__)
 
@@ -23,7 +24,7 @@ class RoleManager(base.ModelManager):
     group_assoc = model.GroupRoleAssociation
 
     def __init__(self, app):
-        super(RoleManager, self).__init__(app)
+        super().__init__(app)
 
     def get(self, trans, decoded_role_id):
         """
@@ -45,5 +46,5 @@ class RoleManager(base.ModelManager):
         except sqlalchemy_exceptions.NoResultFound:
             raise galaxy.exceptions.RequestParameterInvalidException('No role found with the id provided.')
         except Exception as e:
-            raise galaxy.exceptions.InternalServerError('Error loading from the database.' + str(e))
+            raise galaxy.exceptions.InternalServerError('Error loading from the database.' + unicodify(e))
         return role

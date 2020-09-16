@@ -5,7 +5,6 @@ import random
 import re
 import shlex
 import stat
-import string
 import tempfile
 import uuid
 from itertools import product
@@ -19,24 +18,27 @@ from galaxy import model, web
 from galaxy.containers import ContainerPort
 from galaxy.containers.docker_model import DockerVolume
 from galaxy.managers import api_keys
-from galaxy.util import string_as_bool_or_none
+from galaxy.util import (
+    string_as_bool_or_none,
+    unicodify
+)
 from galaxy.util.bunch import Bunch
 
 
 IS_OS_X = _platform == "darwin"
 CONTAINER_NAME_PREFIX = 'gie_'
-ENV_OVERRIDE_CAPITALIZE = frozenset([
+ENV_OVERRIDE_CAPITALIZE = frozenset({
     'notebook_username',
     'notebook_password',
     'dataset_hid',
     'dataset_filename',
     'additional_ids',
-])
+})
 
 log = logging.getLogger(__name__)
 
 
-class InteractiveEnvironmentRequest(object):
+class InteractiveEnvironmentRequest:
 
     def __init__(self, trans, plugin):
         self.trans = trans
@@ -88,7 +90,7 @@ class InteractiveEnvironmentRequest(object):
             self.attr.proxy_prefix = '/'.join(
                 (
                     '',
-                    self.attr.galaxy_config.cookie_path.strip('/'),
+                    trans.cookie_path.strip('/'),
                     self.attr.galaxy_config.dynamic_proxy_prefix.strip('/'),
                     self.attr.viz_id,
                 )
@@ -121,7 +123,7 @@ class InteractiveEnvironmentRequest(object):
             except AttributeError:
                 raise Exception("[{0}] Could not find allowed_images.yml, or image tag in {0}.ini file for ".format(self.attr.viz_id))
 
-        with open(fn, 'r') as handle:
+        with open(fn) as handle:
             self.allowed_images = [x['image'] for x in yaml.safe_load(handle)]
 
             if len(self.allowed_images) == 0:
@@ -196,7 +198,7 @@ class InteractiveEnvironmentRequest(object):
         }
 
         web_port = self.attr.galaxy_config.galaxy_infrastructure_web_port
-        conf_file['galaxy_web_port'] = web_port or self.attr.galaxy_config.guess_galaxy_port()
+        conf_file['galaxy_web_port'] = web_port
 
         if self.attr.viz_config.has_option("docker", "galaxy_url"):
             conf_file['galaxy_url'] = self.attr.viz_config.get("docker", "galaxy_url")
@@ -264,7 +266,7 @@ class InteractiveEnvironmentRequest(object):
         if env_override is None:
             env_override = {}
         conf = self.get_conf_dict()
-        conf = dict([(key.upper(), item) for key, item in conf.items()])
+        conf = {key.upper(): item for key, item in conf.items()}
         for key, item in env_override.items():
             if key in ENV_OVERRIDE_CAPITALIZE:
                 key = key.upper()
@@ -354,7 +356,7 @@ class InteractiveEnvironmentRequest(object):
                 envsets.append(item[2:])
             elif item.startswith('--env'):
                 envsets.append(item[5:])
-        return dict(map(lambda s: string.split(s, '=', 1), envsets))
+        return dict(_.split('=', 1) for _ in envsets)
 
     def container_run_args(self, image, env_override=None, volumes=None):
         if volumes is None:
@@ -391,7 +393,7 @@ class InteractiveEnvironmentRequest(object):
             decoded_id = self.trans.security.decode_id(id)
             dataset = self.trans.sa_session.query(model.HistoryDatasetAssociation).get(decoded_id)
             # TODO: do we need to check if the user has access?
-            volumes.append(self.volume('/import/[{0}] {1}.{2}'.format(dataset.id, dataset.name, dataset.ext), dataset.get_file_name()))
+            volumes.append(self.volume('/import/[{}] {}.{}'.format(dataset.id, dataset.name, dataset.ext), dataset.get_file_name()))
         return volumes
 
     def _find_port_mapping(self, port_mappings):
@@ -426,14 +428,16 @@ class InteractiveEnvironmentRequest(object):
 
             redacted_command = [make_safe(x) for x in raw_cmd]
 
-        log.info("Starting docker container for IE {0} with command [{1}]".format(
+        log.info("Starting docker container for IE {} with command [{}]".format(
             self.attr.viz_id,
-            ' '.join([shlex_quote(x) for x in redacted_command])
+            ' '.join(shlex_quote(x) for x in redacted_command)
         ))
         p = Popen(raw_cmd, stdout=PIPE, stderr=PIPE, close_fds=True)
         stdout, stderr = p.communicate()
+        stdout = unicodify(stdout)
+        stderr = unicodify(stderr)
         if p.returncode != 0:
-            log.error("Container Launch error\n\n%s\n%s" % (stdout, stderr))
+            log.error("Container Launch error\n\n{}\n{}".format(stdout, stderr))
             return None
         else:
             container_id = stdout.strip()
@@ -538,15 +542,15 @@ class InteractiveEnvironmentRequest(object):
         :returns: inspect_data, a dict of docker inspect output
         """
         raw_cmd = self.base_docker_cmd('inspect') + [container_id]
-        log.info("Inspecting docker container {0} with command [{1}]".format(
+        log.info("Inspecting docker container {} with command [{}]".format(
             container_id,
-            ' '.join([shlex_quote(x) for x in raw_cmd])
+            ' '.join(shlex_quote(x) for x in raw_cmd)
         ))
 
         p = Popen(raw_cmd, stdout=PIPE, stderr=PIPE, close_fds=True)
         stdout, stderr = p.communicate()
         if p.returncode != 0:
-            log.error("Container Launch error\n\n%s\n%s" % (stdout, stderr))
+            log.error("Container Launch error\n\n{}\n{}".format(stdout, stderr))
             return None
 
         inspect_data = json.loads(stdout)

@@ -2,29 +2,22 @@
 Migration script to add a deleted column to the following tables:
 library_info_association, library_folder_info_association, library_dataset_dataset_info_association.
 """
-from __future__ import print_function
 
 import logging
 
 from sqlalchemy import Boolean, Column, MetaData, Table
 
+from galaxy.model.migrate.versions.util import engine_false
+
 log = logging.getLogger(__name__)
 metadata = MetaData()
 
 
-def engine_false(migrate_engine):
-    if migrate_engine.name in ['postgres', 'postgresql']:
-        return "FALSE"
-    elif migrate_engine.name in ['mysql', 'sqlite']:
-        return 0
-    else:
-        raise Exception('Unknown database type: %s' % migrate_engine.name)
-
-
 def upgrade(migrate_engine):
-    metadata.bind = migrate_engine
     print(__doc__)
+    metadata.bind = migrate_engine
     metadata.reflect()
+
     try:
         LibraryInfoAssociation_table = Table("library_info_association", metadata, autoload=True)
         c = Column("deleted", Boolean, index=True, default=False)
@@ -64,5 +57,4 @@ def upgrade(migrate_engine):
 
 
 def downgrade(migrate_engine):
-    metadata.bind = migrate_engine
     pass

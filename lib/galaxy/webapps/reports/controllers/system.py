@@ -8,7 +8,8 @@ from sqlalchemy import and_, desc, false, null, true
 from sqlalchemy.orm import eagerload
 
 from galaxy import model, util
-from galaxy.web.base.controller import BaseUIController, web
+from galaxy.util import unicodify
+from galaxy.webapps.base.controller import BaseUIController, web
 
 log = logging.getLogger(__name__)
 
@@ -151,9 +152,9 @@ class System(BaseUIController):
     def get_disk_usage(self, file_path):
         is_sym_link = os.path.islink(file_path)
         file_system = disk_size = disk_used = disk_avail = disk_cap_pct = mount = None
-        df_output = subprocess.check_output(['df', '-h', file_path])
+        df_output = unicodify(subprocess.check_output(['df', '-h', file_path]))
 
-        for df_line in df_output:
+        for df_line in df_output.splitlines():
             df_line = df_line.strip()
             if df_line:
                 df_line = df_line.lower()
@@ -199,15 +200,15 @@ def nice_size(size, include_bytes=False):
         nsize = Decimal(size)
         for x in ['bytes', 'KB', 'MB', 'GB']:
             if nsize.compare(Decimal("1024.0")) == Decimal("-1"):
-                nice_string = "%3.1f %s" % (nsize, x)
+                nice_string = "{:3.1f} {}".format(nsize, x)
                 niced = True
                 break
             nsize /= Decimal("1024.0")
         if not niced:
-            nice_string = "%3.1f %s" % (nsize, 'TB')
+            nice_string = "{:3.1f} {}".format(nsize, 'TB')
             niced = True
         if include_bytes and x != 'bytes':
-            nice_string = "%s (%s bytes)" % (nice_string, size)
+            nice_string = "{} ({} bytes)".format(nice_string, size)
     except Exception:
         pass
     return nice_string

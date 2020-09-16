@@ -1,23 +1,22 @@
-import inspect
 import logging
 from functools import wraps
 from json import loads
 from traceback import format_exc
 
 import paste.httpexceptions
-from six import string_types
 
 from galaxy.exceptions import error_codes, MessageException
 from galaxy.util import (
     parse_non_hex_float,
     unicodify
 )
+from galaxy.util.getargspec import getfullargspec
 from galaxy.util.json import safe_dumps
 from galaxy.web.framework import url_for
 
 log = logging.getLogger(__name__)
 
-JSON_CONTENT_TYPE = "application/json"
+JSON_CONTENT_TYPE = "application/json; charset=UTF-8"
 JSONP_CONTENT_TYPE = "application/javascript"
 JSONP_CALLBACK_KEY = 'callback'
 
@@ -55,7 +54,7 @@ def json(func, pretty=False):
         else:
             trans.response.set_content_type(JSON_CONTENT_TYPE)
         rval = func(self, trans, *args, **kwargs)
-        return _format_return_as_json(rval, jsonp_callback, pretty=(pretty or trans.debug))
+        return format_return_as_json(rval, jsonp_callback, pretty=(pretty or trans.debug))
 
     if not hasattr(func, '_orig'):
         call_and_format._orig = func
@@ -102,8 +101,21 @@ def require_admin(func):
     return decorator
 
 
+def do_not_cache(func):
+    """
+    Sets cache-prevention headers for the request.
+    """
+    @wraps(func)
+    def set_nocache_headers(self, trans, *args, **kwargs):
+        trans.response.headers['Cache-Control'] = ['no-cache', 'no-store', 'must-revalidate']
+        trans.response.headers['Pragma'] = 'no-cache'
+        trans.response.headers['Expires'] = '0'
+        return func(self, trans, *args, **kwargs)
+    return set_nocache_headers
+
+
 # ----------------------------------------------------------------------------- (original) api decorators
-def expose_api(func, to_json=True, user_required=True):
+def legacy_expose_api(func, to_json=True, user_required=True):
     """
     Expose this function via the API.
     """
@@ -156,7 +168,7 @@ def expose_api(func, to_json=True, user_required=True):
         try:
             rval = func(self, trans, *args, **kwargs)
             if to_json:
-                rval = _format_return_as_json(rval, jsonp_callback, pretty=trans.debug)
+                rval = format_return_as_json(rval, jsonp_callback, pretty=trans.debug)
             return rval
         except paste.httpexceptions.HTTPException:
             raise  # handled
@@ -176,11 +188,11 @@ def __extract_payload_from_request(trans, func, kwargs):
         # in the payload. Therefore, the decorated method's formal arguments are discovered through reflection and removed from
         # the payload dictionary. This helps to prevent duplicate argument conflicts in downstream methods.
         payload = kwargs.copy()
-        named_args, _, _, _ = inspect.getargspec(func)
+        named_args = getfullargspec(func).args
         for arg in named_args:
             payload.pop(arg, None)
         for k, v in payload.items():
-            if isinstance(v, string_types):
+            if isinstance(v, str):
                 try:
                     # note: parse_non_hex_float only needed here for single string values where something like
                     # 40000000000000e5 will be parsed as a scientific notation float. This is as opposed to hex strings
@@ -197,32 +209,31 @@ def __extract_payload_from_request(trans, func, kwargs):
     return payload
 
 
-def expose_api_raw(func):
+def legacy_expose_api_raw(func):
     """
     Expose this function via the API but don't dump the results
     to JSON.
     """
-    return expose_api(func, to_json=False)
+    return legacy_expose_api(func, to_json=False)
 
 
-def expose_api_raw_anonymous(func):
+def legacy_expose_api_raw_anonymous(func):
     """
     Expose this function via the API but don't dump the results
     to JSON.
     """
-    return expose_api(func, to_json=False, user_required=False)
+    return legacy_expose_api(func, to_json=False, user_required=False)
 
 
-def expose_api_anonymous(func, to_json=True):
+def legacy_expose_api_anonymous(func, to_json=True):
     """
     Expose this function via the API but don't require a set user.
     """
-    return expose_api(func, to_json=to_json, user_required=False)
+    return legacy_expose_api(func, to_json=to_json, user_required=False)
 
 
 # ----------------------------------------------------------------------------- (new) api decorators
-# TODO: rename as expose_api and make default.
-def _future_expose_api(func, to_json=True, user_required=True, user_or_session_required=True, handle_jsonp=True):
+def expose_api(func, to_json=True, user_required=True, user_or_session_required=True, handle_jsonp=True):
     """
     Expose this function via the API.
     """
@@ -240,7 +251,7 @@ def _future_expose_api(func, to_json=True, user_required=True, user_or_session_r
             # error if anon and no session
             if not trans.galaxy_session and user_or_session_required:
                 return __api_error_response(trans, status_code=403, err_code=error_codes.USER_NO_API_KEY,
-                                            err_msg="API authentication required for this request")
+                                            err_msg="API authentication or Galaxy session required for this request")
 
         if trans.request.body:
             try:
@@ -282,7 +293,7 @@ def _future_expose_api(func, to_json=True, user_required=True, user_or_session_r
         try:
             rval = func(self, trans, *args, **kwargs)
             if to_json:
-                rval = _format_return_as_json(rval, jsonp_callback, pretty=trans.debug)
+                rval = format_return_as_json(rval, jsonp_callback, pretty=trans.debug)
             return rval
         except MessageException as e:
             traceback_string = format_exc()
@@ -308,7 +319,7 @@ def _future_expose_api(func, to_json=True, user_required=True, user_or_session_r
     return decorator
 
 
-def _format_return_as_json(rval, jsonp_callback=None, pretty=False):
+def format_return_as_json(rval, jsonp_callback=None, pretty=False):
     """
     Formats a return value as JSON or JSONP if `jsonp_callback` is present.
 
@@ -372,31 +383,31 @@ def __api_error_response(trans, **kwds):
     return safe_dumps(error_dict)
 
 
-def _future_expose_api_anonymous(func, to_json=True):
+def expose_api_anonymous(func, to_json=True):
     """
     Expose this function via the API but don't require a set user.
     """
-    return _future_expose_api(func, to_json=to_json, user_required=False)
+    return expose_api(func, to_json=to_json, user_required=False)
 
 
-def _future_expose_api_anonymous_and_sessionless(func, to_json=True):
+def expose_api_anonymous_and_sessionless(func, to_json=True):
     """
     Expose this function via the API but don't require a user or a galaxy_session.
     """
-    return _future_expose_api(func, to_json=to_json, user_required=False, user_or_session_required=False)
+    return expose_api(func, to_json=to_json, user_required=False, user_or_session_required=False)
 
 
-def _future_expose_api_raw(func):
-    return _future_expose_api(func, to_json=False, user_required=True)
+def expose_api_raw(func):
+    return expose_api(func, to_json=False, user_required=True)
 
 
-def _future_expose_api_raw_anonymous(func):
-    return _future_expose_api(func, to_json=False, user_required=False)
+def expose_api_raw_anonymous(func):
+    return expose_api(func, to_json=False, user_required=False)
 
 
-def _future_expose_api_raw_anonymous_and_sessionless(func):
+def expose_api_raw_anonymous_and_sessionless(func):
     # TODO: tool_shed api implemented JSONP first on a method-by-method basis, don't overwrite that for now
-    return _future_expose_api(
+    return expose_api(
         func,
         to_json=False,
         user_required=False,

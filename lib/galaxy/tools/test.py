@@ -2,12 +2,14 @@ import logging
 import os
 import os.path
 
-from six import string_types
 
 import galaxy.tools.parameters.basic
 import galaxy.tools.parameters.grouping
-from galaxy.tools.verify.interactor import ToolTestDescription
-from galaxy.util import string_as_bool
+from galaxy.tool_util.verify.interactor import ToolTestDescription
+from galaxy.util import (
+    string_as_bool,
+    unicodify,
+)
 
 try:
     from nose.tools import nottest
@@ -21,7 +23,7 @@ log = logging.getLogger(__name__)
 @nottest
 def parse_tests(tool, tests_source):
     """
-    Build ToolTestBuilder objects for each "<test>" elements and
+    Build ToolTestDescription objects for each "<test>" elements and
     return default interactor (if any).
     """
     raw_tests_dict = tests_source.parse_tests_to_dict()
@@ -47,6 +49,7 @@ def description_from_tool_object(tool, test_index, raw_test_dict):
             "output_collections": raw_test_dict["output_collections"],
             "num_outputs": num_outputs,
             "command_line": raw_test_dict.get("command", None),
+            "command_version": raw_test_dict.get("command_version", None),
             "stdout": raw_test_dict.get("stdout", None),
             "stderr": raw_test_dict.get("stderr", None),
             "expect_exit_code": raw_test_dict.get("expect_exit_code", None),
@@ -63,7 +66,7 @@ def description_from_tool_object(tool, test_index, raw_test_dict):
             "test_index": test_index,
             "inputs": {},
             "error": True,
-            "exception": str(e),
+            "exception": unicodify(e),
         }
 
     return ToolTestDescription(processed_test_dict)
@@ -241,7 +244,7 @@ def _add_uploaded_dataset(name, value, extra, input_parameter, required_files):
 
 
 def _split_if_str(value):
-    split = isinstance(value, string_types)
+    split = isinstance(value, str)
     if split:
         value = value.split(",")
     return value
@@ -278,7 +281,7 @@ def require_file(name, value, extra, required_files):
     return value
 
 
-class ParamContext(object):
+class ParamContext:
 
     def __init__(self, name, index=None, parent_context=None):
         self.parent_context = parent_context
@@ -289,7 +292,7 @@ class ParamContext(object):
         name = self.name if self.index is None else "%s_%d" % (self.name, self.index)
         parent_for_state = self.parent_context.for_state()
         if parent_for_state:
-            return "%s|%s" % (parent_for_state, name)
+            return "{}|{}".format(parent_for_state, name)
         else:
             return name
 
@@ -301,7 +304,7 @@ class ParamContext(object):
             if self.index is not None:
                 yield "%s|%s_%d" % (parent_context_param, self.name, self.index)
             else:
-                yield "%s|%s" % (parent_context_param, self.name)
+                yield "{}|{}".format(parent_context_param, self.name)
         if self.index is not None:
             yield "%s_%d" % (self.name, self.index)
         else:
@@ -327,7 +330,7 @@ class ParamContext(object):
             return None
 
 
-class RootParamContext(object):
+class RootParamContext:
 
     def __init__(self):
         pass

@@ -9,12 +9,12 @@ from sqlalchemy.sql.expression import null
 from galaxy.exceptions import HandlerAssignmentError, ToolExecutionError
 from galaxy.jobs import handler, NoopQueue
 from galaxy.model import Job
-from galaxy.web.stack.message import JobHandlerMessage
+from galaxy.web_stack.message import JobHandlerMessage
 
 log = logging.getLogger(__name__)
 
 
-class JobManager(object):
+class JobManager:
     """
     Highest level interface to job management.
     """
@@ -35,7 +35,7 @@ class JobManager(object):
             if jobs_at_startup:
                 log.info(
                     'No handler assigned at startup for the following jobs, will dispatch via message: %s',
-                    ', '.join([str(j.id) for j in jobs_at_startup]))
+                    ', '.join(str(j.id) for j in jobs_at_startup))
             for job in jobs_at_startup:
                 tool = self.app.toolbox.get_tool(job.tool_id, job.tool_version, exact=True)
                 self.enqueue(job, tool)
@@ -49,7 +49,7 @@ class JobManager(object):
     def _message_callback(self, job):
         return JobHandlerMessage(task='setup', job_id=job.id)
 
-    def enqueue(self, job, tool=None):
+    def enqueue(self, job, tool=None, flush=True):
         """Queue a job for execution.
 
         Due to the nature of some handler assignment methods which are wholly DB-based, the enqueue method will flush
@@ -76,7 +76,7 @@ class JobManager(object):
         message_callback = partial(self._message_callback, job)
         try:
             return self.app.job_config.assign_handler(
-                job, configured=configured_handler, queue_callback=queue_callback, message_callback=message_callback)
+                job, configured=configured_handler, queue_callback=queue_callback, message_callback=message_callback, flush=flush)
         except HandlerAssignmentError as exc:
             raise ToolExecutionError(exc.args[0], job=exc.obj)
 
@@ -96,7 +96,7 @@ class JobManager(object):
         self.job_handler.shutdown()
 
 
-class NoopManager(object):
+class NoopManager:
     """
     Implements the JobManager interface but does nothing
     """
@@ -110,7 +110,7 @@ class NoopManager(object):
         pass
 
 
-class NoopHandler(object):
+class NoopHandler:
     """
     Implements the JobHandler interface but does nothing
     """

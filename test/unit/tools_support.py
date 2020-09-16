@@ -11,8 +11,8 @@ from collections import defaultdict
 
 import galaxy.datatypes.registry
 import galaxy.model
+from galaxy.tool_util.parser import get_tool_source
 from galaxy.tools import create_tool_from_source
-from galaxy.tools.parser import get_tool_source
 from galaxy.util.bunch import Bunch
 from .unittest_utils import galaxy_mock
 
@@ -99,6 +99,7 @@ class UsesTools(object):
         tool_source = get_tool_source(self.tool_file)
         try:
             self.tool = create_tool_from_source(self.app, tool_source, config_file=self.tool_file)
+            self.tool.assert_finalized()
         except Exception:
             self.tool = None
         if getattr(self, "tool_action", None and self.tool):

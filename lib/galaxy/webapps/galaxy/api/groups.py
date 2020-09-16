@@ -6,15 +6,15 @@ import logging
 from sqlalchemy import false
 
 from galaxy import web
-from galaxy.web.base.controller import BaseAPIController, url_for
+from galaxy.webapps.base.controller import BaseAPIController, url_for
 
 log = logging.getLogger(__name__)
 
 
 class GroupAPIController(BaseAPIController):
 
-    @web.expose_api
     @web.require_admin
+    @web.legacy_expose_api
     def index(self, trans, **kwd):
         """
         GET /api/groups
@@ -29,7 +29,7 @@ class GroupAPIController(BaseAPIController):
                 rval.append(item)
         return rval
 
-    @web.expose_api
+    @web.legacy_expose_api
     def create(self, trans, payload, **kwd):
         """
         POST /api/groups
@@ -52,7 +52,7 @@ class GroupAPIController(BaseAPIController):
         user_ids = payload.get('user_ids', [])
         for i in user_ids:
             log.info("user_id: %s\n" % (i))
-            log.info("%s %s\n" % (i, trans.security.decode_id(i)))
+            log.info("{} {}\n".format(i, trans.security.decode_id(i)))
         users = [trans.sa_session.query(trans.model.User).get(trans.security.decode_id(i)) for i in user_ids]
         role_ids = payload.get('role_ids', [])
         roles = [trans.sa_session.query(trans.model.Role).get(trans.security.decode_id(i)) for i in role_ids]
@@ -71,8 +71,8 @@ class GroupAPIController(BaseAPIController):
         item['url'] = url_for('group', id=encoded_id)
         return [item]
 
-    @web.expose_api
     @web.require_admin
+    @web.legacy_expose_api
     def show(self, trans, id, **kwd):
         """
         GET /api/groups/{encoded_group_id}
@@ -97,8 +97,8 @@ class GroupAPIController(BaseAPIController):
         item['roles_url'] = url_for('group_roles', group_id=group_id)
         return item
 
-    @web.expose_api
     @web.require_admin
+    @web.legacy_expose_api
     def update(self, trans, id, payload, **kwd):
         """
         PUT /api/groups/{encoded_group_id}

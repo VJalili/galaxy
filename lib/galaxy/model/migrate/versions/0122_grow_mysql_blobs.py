@@ -1,7 +1,6 @@
 """
 Migration script to grow MySQL blobs.
 """
-from __future__ import print_function
 
 import logging
 
@@ -33,15 +32,15 @@ BLOB_COLUMNS = [
 
 
 def upgrade(migrate_engine):
-    metadata.bind = migrate_engine
     print(__doc__)
+    metadata.bind = migrate_engine
     metadata.reflect()
 
     if migrate_engine.name != "mysql":
         return
 
     for (table, column) in BLOB_COLUMNS:
-        cmd = "ALTER TABLE %s MODIFY COLUMN %s MEDIUMBLOB;" % (table, column)
+        cmd = "ALTER TABLE {} MODIFY COLUMN {} MEDIUMBLOB;".format(table, column)
         try:
             migrate_engine.execute(cmd)
         except Exception:
@@ -49,7 +48,4 @@ def upgrade(migrate_engine):
 
 
 def downgrade(migrate_engine):
-    metadata.bind = migrate_engine
-    metadata.reflect()
-    # Ignoring..., changed the datatype so no guarantee these columns weren't
-    # MEDIUMBLOBs before.
+    pass

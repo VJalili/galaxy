@@ -5,8 +5,8 @@ from unittest import TestCase
 
 import psutil
 
+from galaxy import job_metrics
 from galaxy import model
-from galaxy.jobs import metrics
 from galaxy.jobs.runners import local
 from galaxy.util import bunch
 from ..tools_support import (
@@ -20,7 +20,7 @@ class TestLocalJobRunner(TestCase, UsesApp, UsesTools):
     def setUp(self):
         self.setup_app()
         self._init_tool()
-        self.app.job_metrics = metrics.JobMetrics()
+        self.app.job_metrics = job_metrics.JobMetrics()
         self.job_wrapper = MockJobWrapper(self.app, self.test_directory, self.tool)
 
     def tearDown(self):
@@ -144,6 +144,8 @@ class MockJobWrapper(object):
         self.shell = "/bin/bash"
         self.cleanup_job = "never"
         self.tmp_dir_creation_statement = ""
+        self.use_metadata_binary = False
+        self.guest_ports = []
 
         # Cruft for setting metadata externally, axe at some point.
         self.external_output_metadata = bunch.Bunch(
@@ -169,11 +171,14 @@ class MockJobWrapper(object):
     def prepare(self):
         self.prepare_called = True
 
-    def set_job_destination(self, job_destination, external_id):
+    def set_external_id(self, external_id, **kwd):
         self.job.job_runner_external_id = external_id
 
     def get_command_line(self):
         return self.command_line
+
+    def container_monitor_command(self, *args, **kwds):
+        return None
 
     def get_id_tag(self):
         return "1"
@@ -181,7 +186,7 @@ class MockJobWrapper(object):
     def get_state(self):
         return self.state
 
-    def change_state(self, state):
+    def change_state(self, state, job=None):
         self.state = state
 
     def get_output_fnames(self):

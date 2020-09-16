@@ -18,7 +18,7 @@ from galaxy.managers import sharable
 from galaxy.util import Params
 
 try:
-    from cloudbridge.cloud.factory import CloudProviderFactory, ProviderList
+    from cloudbridge.factory import CloudProviderFactory, ProviderList
 except ImportError:
     CloudProviderFactory = None
     ProviderList = None
@@ -51,7 +51,7 @@ class CloudManager(sharable.SharableModelManager):
     model_class = model.History
 
     def __init__(self, app, *args, **kwargs):
-        super(CloudManager, self).__init__(app, *args, **kwargs)
+        super().__init__(app, *args, **kwargs)
 
     @staticmethod
     def configure_provider(provider, credentials):
@@ -147,6 +147,9 @@ class CloudManager(sharable.SharableModelManager):
                       'os_project_domain_name': prj_domain_name,
                       'os_user_domain_name': user_domain_name}
             connection = CloudProviderFactory().create_provider(ProviderList.OPENSTACK, config)
+        elif provider == "gcp":
+            config = {"gcp_service_creds_dict": credentials}
+            connection = CloudProviderFactory().create_provider(ProviderList.GCP, config)
         else:
             raise RequestParameterInvalidException("Unrecognized provider '{}'; the following are the supported "
                                                    "providers: {}.".format(provider, SUPPORTED_PROVIDERS.keys()))
@@ -203,7 +206,7 @@ class CloudManager(sharable.SharableModelManager):
         which leverages CloudAuthz (https://github.com/galaxyproject/cloudauthz) and automatically
         requests temporary credentials to access the defined resources.
 
-        :type  trans:       galaxy.web.framework.webapp.GalaxyWebTransaction
+        :type  trans:       galaxy.webapps.base.webapp.GalaxyWebTransaction
         :param trans:       Galaxy web transaction
 
         :type  history_id:  string
@@ -247,14 +250,14 @@ class CloudManager(sharable.SharableModelManager):
             if bucket is None:
                 raise RequestParameterInvalidException("The bucket `{}` not found.".format(bucket_name))
         except Exception as e:
-            raise ItemAccessibilityException("Could not get the bucket `{}`: {}".format(bucket_name, str(e)))
+            raise ItemAccessibilityException("Could not get the bucket `{}`: {}".format(bucket_name, util.unicodify(e)))
 
         datasets = []
         for obj in objects:
             try:
                 key = bucket.objects.get(obj)
             except Exception as e:
-                raise MessageException("The following error occurred while getting the object {}: {}".format(obj, str(e)))
+                raise MessageException("The following error occurred while getting the object {}: {}".format(obj, util.unicodify(e)))
             if key is None:
                 log.exception(
                     "Could not get object `{}` for user `{}`. Object may not exist, or the provided credentials are "
@@ -285,7 +288,7 @@ class CloudManager(sharable.SharableModelManager):
         Implements the logic of sending dataset(s) from a given history to a given cloud-based storage
         (e.g., Amazon S3).
 
-        :type  trans:               galaxy.web.framework.webapp.GalaxyWebTransaction
+        :type  trans:               galaxy.webapps.base.webapp.GalaxyWebTransaction
         :param trans:               Galaxy web transaction
 
         :type  history_id:          string
@@ -340,8 +343,8 @@ class CloudManager(sharable.SharableModelManager):
                 try:
                     object_label = hda.name.replace(" ", "_")
                     args = {
-                        # We encode ID here because it the tool wrapper assumes
-                        # it receives an encoded ID and attempts decoding it.
+                        # We encode ID here because the tool wrapper expects
+                        # an encoded ID and attempts decoding it.
                         "authz_id": trans.security.encode_id(cloudauthz.id),
                         "bucket": bucket_name,
                         "object_label": object_label,
@@ -366,7 +369,7 @@ class CloudManager(sharable.SharableModelManager):
                             "job_id": trans.app.security.encode_id(job.id)
                         }))
                 except Exception as e:
-                    err_msg = "maybe invalid or unauthorized credentials. {}".format(e.message)
+                    err_msg = "maybe invalid or unauthorized credentials. {}".format(util.unicodify(e))
                     log.debug("Failed to send the dataset `{}` per user `{}` request to cloud, {}".format(
                         object_label, trans.user.id, err_msg))
                     failed.append(json.dumps(

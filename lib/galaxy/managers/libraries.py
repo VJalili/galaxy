@@ -9,19 +9,22 @@ from sqlalchemy.orm.exc import NoResultFound
 
 from galaxy import exceptions
 from galaxy.managers import folders
-from galaxy.util import pretty_print_time_interval
+from galaxy.util import (
+    pretty_print_time_interval,
+    unicodify,
+)
 
 log = logging.getLogger(__name__)
 
 
 # =============================================================================
-class LibraryManager(object):
+class LibraryManager:
     """
     Interface/service object for interacting with libraries.
     """
 
     def __init__(self, *args, **kwargs):
-        super(LibraryManager, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def get(self, trans, decoded_library_id, check_accessible=True):
         """
@@ -42,7 +45,7 @@ class LibraryManager(object):
         except NoResultFound:
             raise exceptions.RequestParameterInvalidException('No library found with the id provided.')
         except Exception as e:
-            raise exceptions.InternalServerError('Error loading from the database.' + str(e))
+            raise exceptions.InternalServerError('Error loading from the database.' + unicodify(e))
         library = self.secure(trans, library, check_accessible)
         return library
 

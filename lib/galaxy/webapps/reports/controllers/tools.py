@@ -11,7 +11,7 @@ from galaxy.util import (
     restore_text,
     unicodify
 )
-from galaxy.web.base.controller import BaseUIController, web
+from galaxy.webapps.base.controller import BaseUIController, web
 
 
 log = logging.getLogger(__name__)
@@ -32,9 +32,9 @@ def int_to_octet(size):
         size /= 1000.
         no_unit += 1
     try:
-        return "%.2f %s" % (size, units[no_unit])
+        return "{:.2f} {}".format(size, units[no_unit])
     except IndexError:
-        return "%.0f %s" % (size * ((no_unit - len(units) + 1) * 1000.), units[-1])
+        return "{:.0f} {}".format(size * ((no_unit - len(units) + 1) * 1000.), units[-1])
 
 
 class Tools(BaseUIController):
@@ -322,7 +322,7 @@ class Tools(BaseUIController):
 
         spaces = [' ', '\t', '    ']
         for key in keys:
-            new_key = '</br>'.join([_ for _ in key.split('\n') if _ and _ not in spaces])
+            new_key = '</br>'.join(_ for _ in key.split('\n') if _ and _ not in spaces)
             if len(new_key) >= 100:
                 to_replace = []
                 words = key.split('\n')

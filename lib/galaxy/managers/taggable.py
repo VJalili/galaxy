@@ -6,6 +6,9 @@ Mixins for Taggable model managers and serializers.
 
 import logging
 
+from sqlalchemy import sql
+
+from galaxy import model
 from galaxy.util import unicodify
 
 log = logging.getLogger(__name__)
@@ -41,7 +44,7 @@ def _tags_from_strings(item, tag_handler, new_tags_list, user=None):
     # TODO:!! does the creation of new_tags_list mean there are now more and more unused tag rows in the db?
 
 
-class TaggableManagerMixin(object):
+class TaggableManagerMixin:
     #: class of TagAssociation (e.g. HistoryTagAssociation)
     tag_assoc = None
 
@@ -63,7 +66,7 @@ class TaggableManagerMixin(object):
     #    pass
 
 
-class TaggableSerializerMixin(object):
+class TaggableSerializerMixin:
 
     def add_serializers(self):
         self.serializers['tags'] = self.serialize_tags
@@ -75,7 +78,7 @@ class TaggableSerializerMixin(object):
         return _tags_to_strings(item)
 
 
-class TaggableDeserializerMixin(object):
+class TaggableDeserializerMixin:
 
     def add_deserializers(self):
         self.deserializers['tags'] = self.deserialize_tags
@@ -91,32 +94,40 @@ class TaggableDeserializerMixin(object):
         return item.tags
 
 
-class TaggableFilterMixin(object):
+class TaggableFilterMixin:
 
-    def filter_has_partial_tag(self, item, val):
-        """
-        Return True if any tag partially contains `val`.
-        """
-        for tag_str in _tag_str_gen(item):
-            if val in tag_str:
-                return True
-        return False
+    valid_ops = ('eq', 'contains', 'has')
 
-    def filter_has_tag(self, item, val):
-        """
-        Return True if any tag exactly equals `val`.
-        """
-        for tag_str in _tag_str_gen(item):
-            if val == tag_str:
+    def create_tag_filter(self, attr, op, val):
+
+        def _create_tag_filter(model_class=None):
+            if op not in TaggableFilterMixin.valid_ops:
+                self.raise_filter_err(attr, op, val, 'bad op in filter')
+            if model_class is None:
                 return True
-        return False
+            class_name = model_class.__name__
+            if class_name == 'HistoryDatasetCollectionAssociation':
+                # Unfortunately we were a little inconsistent with out naming scheme
+                class_name = 'HistoryDatasetCollection'
+            target_model = getattr(model, "%sTagAssociation" % class_name)
+            id_column = "%s_id" % target_model.table.name.rsplit('_tag_association')[0]
+            column = target_model.table.c.user_tname + ":" + target_model.table.c.user_value
+            if op == 'eq':
+                if ':' not in val:
+                    # We require an exact match and the tag to look for has no user_value,
+                    # so we can't just concatenate user_tname, ':' and user_vale
+                    cond = target_model.table.c.user_tname == val
+                else:
+                    cond = column == val
+            else:
+                cond = column.contains(val, autoescape=True)
+            return sql.expression.and_(
+                model_class.table.c.id == getattr(target_model.table.c, id_column),
+                cond
+            )
+        return _create_tag_filter
 
     def _add_parsers(self):
-        self.fn_filter_parsers.update({
-            'tag': {
-                'op': {
-                    'eq'    : self.filter_has_tag,
-                    'has'   : self.filter_has_partial_tag,
-                }
-            }
+        self.orm_filter_parsers.update({
+            'tag': self.create_tag_filter
         })

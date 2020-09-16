@@ -1,11 +1,15 @@
-from xml.etree import ElementTree
+import collections
 
 try:
     import yaml
 except ImportError:
     yaml = None
 
+from galaxy.util import parse_xml
 from galaxy.util.submodules import import_submodules
+
+
+PluginConfigSource = collections.namedtuple('PluginConfigSource', ['type', 'source'])
 
 
 def plugins_dict(module, plugin_type_identifier):
@@ -16,13 +20,7 @@ def plugins_dict(module, plugin_type_identifier):
     plugin_dict = {}
 
     for plugin_module in import_submodules(module, ordered=True):
-        # FIXME: this is not how one is suppose to use __all__ why did you do
-        # this past John?
-        for clazz in getattr(plugin_module, "__all__", []):
-            try:
-                clazz = getattr(plugin_module, clazz)
-            except TypeError:
-                clazz = clazz
+        for clazz in __plugin_classes_in_module(plugin_module):
             plugin_type = getattr(clazz, plugin_type_identifier, None)
             if plugin_type:
                 plugin_dict[plugin_type] = clazz
@@ -30,12 +28,22 @@ def plugins_dict(module, plugin_type_identifier):
     return plugin_dict
 
 
-def load_plugins(plugins_dict, plugin_source, extra_kwds={}):
-    source_type, source = plugin_source
-    if source_type == "xml":
-        return __load_plugins_from_element(plugins_dict, source, extra_kwds)
+def load_plugins(plugins_dict, plugin_source, extra_kwds=None, plugin_type_keys=('type',)):
+    if extra_kwds is None:
+        extra_kwds = {}
+    if plugin_source.type == "xml":
+        return __load_plugins_from_element(plugins_dict, plugin_source.source, extra_kwds)
     else:
-        return __load_plugins_from_dicts(plugins_dict, source, extra_kwds)
+        return __load_plugins_from_dicts(plugins_dict, plugin_source.source, extra_kwds, plugin_type_keys=plugin_type_keys)
+
+
+def __plugin_classes_in_module(plugin_module):
+    for clazz in getattr(plugin_module, "__all__", []):
+        try:
+            clazz = getattr(plugin_module, clazz)
+        except TypeError:
+            clazz = clazz
+        yield clazz
 
 
 def __load_plugins_from_element(plugins_dict, plugins_element, extra_kwds):
@@ -58,11 +66,16 @@ def __load_plugins_from_element(plugins_dict, plugins_element, extra_kwds):
     return plugins
 
 
-def __load_plugins_from_dicts(plugins_dict, configs, extra_kwds):
+def __load_plugins_from_dicts(plugins_dict, configs, extra_kwds, plugin_type_keys):
     plugins = []
 
     for config in configs:
-        plugin_type = config["type"]
+        plugin_type = None
+        for plugin_type_key in plugin_type_keys:
+            if plugin_type_key in config:
+                plugin_type = config[plugin_type_key]
+                break
+        assert plugin_type is not None, "Could not determine plugin type for [%s]" % config
         plugin_kwds = config
         plugin_kwds.update(extra_kwds)
         plugin = plugins_dict[plugin_type](**plugin_kwds)
@@ -73,9 +86,13 @@ def __load_plugins_from_dicts(plugins_dict, configs, extra_kwds):
 
 def plugin_source_from_path(path):
     if path.endswith(".yaml") or path.endswith(".yml") or path.endswith(".yaml.sample") or path.endswith(".yml.sample"):
-        return ('dict', __read_yaml(path))
+        return PluginConfigSource('dict', __read_yaml(path))
     else:
-        return ('xml', ElementTree.parse(path).getroot())
+        return PluginConfigSource('xml', parse_xml(path, remove_comments=True).getroot())
+
+
+def plugin_source_from_dict(as_dict):
+    return PluginConfigSource('dict', as_dict)
 
 
 def __read_yaml(path):

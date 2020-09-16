@@ -5,12 +5,12 @@ import os
 
 import yaml
 
-from base import integration_util  # noqa: I100,I202
-from base.populators import (  # noqa: I100
+from galaxy_test.base.populators import (
     DatasetPopulator,
     WorkflowPopulator,
 )
-from base.workflow_fixtures import WORKFLOW_SIMPLE_CAT_TWICE  # noqa: I100
+from galaxy_test.base.workflow_fixtures import WORKFLOW_SIMPLE_CAT_TWICE
+from galaxy_test.driver import integration_util
 
 
 class WorkflowSyncTestCase(integration_util.IntegrationTestCase):
@@ -33,7 +33,7 @@ class WorkflowSyncTestCase(integration_util.IntegrationTestCase):
         with self.workflow_populator.export_for_update(workflow_id) as workflow_object:
             workflow_object["annotation"] = "new annotation"
         with open(workflow_path, "r") as f:
-            data = yaml.load(f)
+            data = yaml.safe_load(f)
             assert data["doc"] == "new annotation"
 
     def test_sync_ga(self):

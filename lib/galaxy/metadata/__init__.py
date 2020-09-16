@@ -8,34 +8,36 @@ import tempfile
 from logging import getLogger
 from os.path import abspath
 
-import six
 from six.moves import cPickle
 
 import galaxy.model
+from galaxy.model import store
 from galaxy.model.metadata import FileParameter, MetadataTempFile
-from galaxy.util import in_directory
+from galaxy.model.store import DirectoryModelExportStore
+from galaxy.util import in_directory, safe_makedirs
 
 log = getLogger(__name__)
 
 SET_METADATA_SCRIPT = 'from galaxy_ext.metadata.set_metadata import set_metadata; set_metadata()'
 
 
-def get_metadata_compute_strategy(app, job_id):
-    metadata_strategy = app.config.metadata_strategy
+def get_metadata_compute_strategy(config, job_id, metadata_strategy_override=None, tool_id=None):
+    metadata_strategy = metadata_strategy_override or config.metadata_strategy
     if metadata_strategy == "legacy":
         return JobExternalOutputMetadataWrapper(job_id)
+    elif metadata_strategy == "extended" and tool_id != "__SET_METADATA__":
+        return ExtendedDirectoryMetadataGenerator(job_id)
     else:
         return PortableDirectoryMetadataGenerator(job_id)
 
 
-@six.add_metaclass(abc.ABCMeta)
-class MetadataCollectionStrategy(object):
+class MetadataCollectionStrategy(metaclass=abc.ABCMeta):
     """Interface describing the abstract process of writing out and collecting output metadata.
     """
+    extended = False
 
     def invalidate_external_metadata(self, datasets, sa_session):
         """Invalidate written files."""
-        pass
 
     def set_job_runner_external_pid(self, pid, sa_session):
         pass
@@ -44,12 +46,13 @@ class MetadataCollectionStrategy(object):
         pass
 
     @abc.abstractmethod
-    def setup_external_metadata(self, datasets_dict, sa_session, exec_dir=None,
+    def setup_external_metadata(self, datasets_dict, out_collections, sa_session, exec_dir=None,
                                 tmp_dir=None, dataset_files_path=None,
-                                output_fnames=None, config_root=None,
+                                output_fnames=None, config_root=None, use_bin=False,
                                 config_file=None, datatypes_config=None,
-                                job_metadata=None, compute_tmp_dir=None,
+                                job_metadata=None, provided_metadata_style=None, compute_tmp_dir=None,
                                 include_command=True, max_metadata_value_size=0,
+                                object_store_conf=None, tool=None, job=None,
                                 kwds=None):
         """Setup files needed for external metadata collection.
 
@@ -73,45 +76,60 @@ class MetadataCollectionStrategy(object):
             normalized_remote_metadata_directory = remote_metadata_directory and os.path.normpath(remote_metadata_directory)
             normalized_path = os.path.normpath(path)
             if remote_metadata_directory and normalized_path.startswith(normalized_remote_metadata_directory):
-                return normalized_path.replace(normalized_remote_metadata_directory, working_directory, 1)
+                if self.portable:
+                    target_directory = os.path.join(working_directory, "metadata")
+                else:
+                    target_directory = working_directory
+                return normalized_path.replace(normalized_remote_metadata_directory, target_directory, 1)
             return path
 
         dataset.metadata.from_JSON_dict(metadata_output_path, path_rewriter=path_rewriter)
 
     def _metadata_results_from_file(self, dataset, filename_results_code):
-        with open(filename_results_code, "r") as f:
-            rval, rstring = json.load(f)
+        try:
+            with open(filename_results_code) as f:
+                rval, rstring = json.load(f)
+        except OSError:
+            rval = False
+            rstring = "Metadata results could not be read from '%s'" % filename_results_code
 
         if not rval:
-            log.debug('setting metadata externally failed for %s %s: %s' % (dataset.__class__.__name__, dataset.id, rstring))
+            log.debug('setting metadata externally failed for {} {}: {}'.format(dataset.__class__.__name__, dataset.id, rstring))
         return rval
 
 
 class PortableDirectoryMetadataGenerator(MetadataCollectionStrategy):
+    portable = True
+    write_object_store_conf = False
 
     def __init__(self, job_id):
         self.job_id = job_id
 
-    def setup_external_metadata(self, datasets_dict, sa_session, exec_dir=None,
+    def setup_external_metadata(self, datasets_dict, out_collections, sa_session, exec_dir=None,
                                 tmp_dir=None, dataset_files_path=None,
-                                output_fnames=None, config_root=None,
+                                output_fnames=None, config_root=None, use_bin=False,
                                 config_file=None, datatypes_config=None,
-                                job_metadata=None, compute_tmp_dir=None,
+                                job_metadata=None, provided_metadata_style=None, compute_tmp_dir=None,
                                 include_command=True, max_metadata_value_size=0,
+                                validate_outputs=False,
+                                object_store_conf=None, tool=None, job=None,
                                 kwds=None):
         assert job_metadata, "setup_external_metadata must be supplied with job_metadata path"
         kwds = kwds or {}
         tmp_dir = _init_tmp_dir(tmp_dir)
 
         metadata_dir = os.path.join(tmp_dir, "metadata")
-        os.mkdir(metadata_dir)
+        # may already exist (i.e. metadata collection in the job handler)
+        safe_makedirs(metadata_dir)
 
         def job_relative_path(path):
             path_relative = os.path.relpath(path, tmp_dir)
             return path_relative
 
         outputs = {}
+        output_collections = {}
 
+        real_metadata_object = self.write_object_store_conf
         for name, dataset in datasets_dict.items():
             assert name is not None
             assert name not in outputs
@@ -119,30 +137,69 @@ class PortableDirectoryMetadataGenerator(MetadataCollectionStrategy):
             key = name
 
             def _metadata_path(what):
-                return os.path.join(metadata_dir, "metadata_%s_%s" % (what, key))
+                return os.path.join(metadata_dir, "metadata_{}_{}".format(what, key))
 
-            _initialize_metadata_inputs(dataset, _metadata_path, tmp_dir, kwds)
+            _initialize_metadata_inputs(dataset, _metadata_path, tmp_dir, kwds, real_metadata_object=real_metadata_object)
 
             outputs[name] = {
-                "filename_override": _get_filename_override(output_fnames, dataset.file_name)
+                "filename_override": _get_filename_override(output_fnames, dataset.file_name),
+                "validate": validate_outputs,
+                "object_store_store_by": dataset.dataset.store_by,
+                'id': dataset.id,
             }
 
         metadata_params_path = os.path.join(metadata_dir, "params.json")
+        datatypes_config = os.path.relpath(datatypes_config, tmp_dir)
         metadata_params = {
             "job_metadata": job_relative_path(job_metadata),
+            "provided_metadata_style": provided_metadata_style,
             "datatypes_config": datatypes_config,
             "max_metadata_value_size": max_metadata_value_size,
             "outputs": outputs,
         }
+
+        if self.write_object_store_conf:
+            # export model objects and object store configuration for extended metadata also.
+            export_directory = os.path.join(metadata_dir, "outputs_new")
+            with DirectoryModelExportStore(export_directory, for_edit=True, serialize_dataset_objects=True) as export_store:
+                for dataset in datasets_dict.values():
+                    export_store.add_dataset(dataset)
+
+                for name, dataset_collection in out_collections.items():
+                    export_store.add_dataset_collection(dataset_collection)
+                    output_collections[name] = {
+                        'id': dataset_collection.id,
+                    }
+
+            with open(os.path.join(metadata_dir, "object_store_conf.json"), "w") as f:
+                json.dump(object_store_conf, f)
+
+            # setup tool
+            tool_as_dict = {}
+            tool_as_dict["stdio_exit_codes"] = [e.to_dict() for e in tool.stdio_exit_codes]
+            tool_as_dict["stdio_regexes"] = [r.to_dict() for r in tool.stdio_regexes]
+            tool_as_dict["outputs"] = {name: output.to_dict() for name, output in tool.outputs.items()}
+            tool_as_dict["output_collections"] = {name: output.to_dict() for name, output in tool.output_collections.items()}
+
+            # setup the rest
+            metadata_params["tool"] = tool_as_dict
+            metadata_params["tool_path"] = tool.config_file
+            metadata_params["job_id_tag"] = job.get_id_tag()
+            metadata_params["job_params"] = job.raw_param_dict()
+            metadata_params["output_collections"] = output_collections
+
         with open(metadata_params_path, "w") as f:
             json.dump(metadata_params, f)
 
         if include_command:
             # return command required to build
-            script_path = os.path.join(metadata_dir, "set.py")
-            with open(script_path, "w") as f:
-                f.write(SET_METADATA_SCRIPT)
-            return 'pwd; python "metadata/set.py"'
+            if use_bin:
+                return "galaxy-set-metadata"
+            else:
+                script_path = os.path.join(metadata_dir, "set.py")
+                with open(script_path, "w") as f:
+                    f.write(SET_METADATA_SCRIPT)
+                return 'python "metadata/set.py"'
         else:
             # return args to galaxy_ext.metadata.set_metadata required to build
             return ''
@@ -153,7 +210,34 @@ class PortableDirectoryMetadataGenerator(MetadataCollectionStrategy):
 
     def external_metadata_set_successfully(self, dataset, name, sa_session, working_directory):
         metadata_results_path = os.path.join(working_directory, "metadata", "metadata_results_%s" % name)
-        return self._metadata_results_from_file(dataset, metadata_results_path)
+        try:
+            return self._metadata_results_from_file(dataset, metadata_results_path)
+        except Exception:
+            # if configured we need to try setting metadata internally
+            return False
+
+
+class ExtendedDirectoryMetadataGenerator(PortableDirectoryMetadataGenerator):
+    extended = True
+    write_object_store_conf = True
+
+    def __init__(self, job_id):
+        self.job_id = job_id
+
+    def setup_external_metadata(self, datasets_dict, out_collections, sa_session, **kwd):
+        command = super().setup_external_metadata(datasets_dict, out_collections, sa_session, **kwd)
+        return command
+
+    def load_metadata(self, dataset, name, sa_session, working_directory, remote_metadata_directory=None):
+        # This method shouldn't really be called one-at-a-time dataset-wise like this and
+        # isn't in job_wrapper.finish, instead finish just executes perform_import() on
+        # the target model store within the context of a session to bring in all the changed objects.
+        # However, this method is part of the metadata interface and is used by unit tests,
+        # so we allow a sessionless import and loading of individual dataset as below.
+        import_model_store = store.imported_store_for_metadata(os.path.join(working_directory, 'metadata', 'outputs_populated'))
+        imported_dataset = import_model_store.sa_session.query(galaxy.model.HistoryDatasetAssociation).find(dataset.id)
+        dataset.metadata = imported_dataset.metadata
+        return dataset
 
 
 class JobExternalOutputMetadataWrapper(MetadataCollectionStrategy):
@@ -166,6 +250,7 @@ class JobExternalOutputMetadataWrapper(MetadataCollectionStrategy):
     DatasetInstance object which will use pickle (in the future this could be
     JSONified as well)
     """
+    portable = False
 
     def __init__(self, job_id):
         self.job_id = job_id
@@ -200,12 +285,14 @@ class JobExternalOutputMetadataWrapper(MetadataCollectionStrategy):
                 sa_session.flush()
                 jeom = self._get_output_filenames_by_dataset(dataset, sa_session)
 
-    def setup_external_metadata(self, datasets_dict, sa_session, exec_dir=None,
+    def setup_external_metadata(self, datasets_dict, out_collections, sa_session, exec_dir=None,
                                 tmp_dir=None, dataset_files_path=None,
-                                output_fnames=None, config_root=None,
+                                output_fnames=None, config_root=None, use_bin=False,
                                 config_file=None, datatypes_config=None,
-                                job_metadata=None, compute_tmp_dir=None,
+                                job_metadata=None, provided_metadata_style=None, compute_tmp_dir=None,
                                 include_command=True, max_metadata_value_size=0,
+                                validate_outputs=False,
+                                object_store_conf=None, tool=None, job=None,
                                 kwds=None):
         kwds = kwds or {}
         tmp_dir = _init_tmp_dir(tmp_dir)
@@ -222,7 +309,7 @@ class JobExternalOutputMetadataWrapper(MetadataCollectionStrategy):
 
         # fill in metadata_files_dict and return the command with args required to set metadata
         def __metadata_files_list_to_cmd_line(metadata_files):
-            line = '"%s,%s,%s,%s,%s,%s"' % (
+            line = '"{},{},{},{},{},{}"'.format(
                 metadata_path_on_compute(metadata_files.filename_in),
                 metadata_path_on_compute(metadata_files.filename_kwds),
                 metadata_path_on_compute(metadata_files.filename_out),
@@ -256,7 +343,7 @@ class JobExternalOutputMetadataWrapper(MetadataCollectionStrategy):
                 # is located differently, i.e. on a cluster node with a different filesystem structure
 
                 def _metadata_path(what):
-                    return abspath(tempfile.NamedTemporaryFile(dir=tmp_dir, prefix="metadata_%s_%s_" % (what, key)).name)
+                    return abspath(tempfile.NamedTemporaryFile(dir=tmp_dir, prefix="metadata_{}_{}_".format(what, key)).name)
 
                 filename_in, filename_out, filename_results_code, filename_kwds, filename_override_metadata = _initialize_metadata_inputs(dataset, _metadata_path, tmp_dir, kwds)
 
@@ -280,17 +367,18 @@ class JobExternalOutputMetadataWrapper(MetadataCollectionStrategy):
                 sa_session.add(metadata_files)
                 sa_session.flush()
             metadata_files_list.append(metadata_files)
-        args = '"%s" "%s" %s %s' % (metadata_path_on_compute(datatypes_config),
+        args = '"{}" "{}" {} {}'.format(metadata_path_on_compute(datatypes_config),
                                     job_metadata,
                                     " ".join(map(__metadata_files_list_to_cmd_line, metadata_files_list)),
                                     max_metadata_value_size)
+        assert not use_bin
         if include_command:
             # return command required to build
             fd, fp = tempfile.mkstemp(suffix='.py', dir=tmp_dir, prefix="set_metadata_")
             metadata_script_file = abspath(fp)
             with os.fdopen(fd, 'w') as f:
                 f.write(SET_METADATA_SCRIPT)
-            return 'python "%s" %s' % (metadata_path_on_compute(metadata_script_file), args)
+            return 'python "{}" {}'.format(metadata_path_on_compute(metadata_script_file), args)
         else:
             # return args to galaxy_ext.metadata.set_metadata required to build
             return args
@@ -316,7 +404,7 @@ class JobExternalOutputMetadataWrapper(MetadataCollectionStrategy):
                 try:
                     os.remove(fname)
                 except Exception as e:
-                    log.debug('Failed to cleanup external metadata file (%s) for %s: %s' % (key, dataset_key, e))
+                    log.debug('Failed to cleanup external metadata file ({}) for {}: {}'.format(key, dataset_key, e))
 
     def set_job_runner_external_pid(self, pid, sa_session):
         for metadata_files in sa_session.query(galaxy.model.Job).get(self.job_id).external_output_metadata:
@@ -334,7 +422,7 @@ class JobExternalOutputMetadataWrapper(MetadataCollectionStrategy):
         self._load_metadata_from_path(dataset, output_filename, working_directory, remote_metadata_directory)
 
 
-def _initialize_metadata_inputs(dataset, path_for_part, tmp_dir, kwds):
+def _initialize_metadata_inputs(dataset, path_for_part, tmp_dir, kwds, real_metadata_object=True):
     filename_in = path_for_part("in")
     filename_out = path_for_part("out")
     filename_results_code = path_for_part("results")
@@ -350,10 +438,12 @@ def _initialize_metadata_inputs(dataset, path_for_part, tmp_dir, kwds):
     override_metadata = []
     for meta_key, spec_value in dataset.metadata.spec.items():
         if isinstance(spec_value.param, FileParameter) and dataset.metadata.get(meta_key, None) is not None:
-            metadata_temp = MetadataTempFile()
-            metadata_temp.tmp_dir = tmp_dir
-            shutil.copy(dataset.metadata.get(meta_key, None).file_name, metadata_temp.file_name)
-            override_metadata.append((meta_key, metadata_temp.to_JSON()))
+            if not real_metadata_object:
+                metadata_temp = MetadataTempFile()
+                metadata_temp.tmp_dir = tmp_dir
+                shutil.copy(dataset.metadata.get(meta_key, None).file_name, metadata_temp.file_name)
+                override_metadata.append((meta_key, metadata_temp.to_JSON()))
+
     json.dump(override_metadata, open(filename_override_metadata, 'wt+'))
 
     return filename_in, filename_out, filename_results_code, filename_kwds, filename_override_metadata
@@ -388,8 +478,5 @@ def _get_filename_override(output_fnames, file_name):
 
 def _init_tmp_dir(tmp_dir):
     assert tmp_dir is not None
-
-    if not os.path.exists(tmp_dir):
-        os.makedirs(tmp_dir)
-
+    safe_makedirs(tmp_dir)
     return tmp_dir

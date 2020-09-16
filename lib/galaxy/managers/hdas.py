@@ -44,8 +44,14 @@ class HDAManager(datasets.DatasetAssociationManager,
         """
         Set up and initialize other managers needed by hdas.
         """
-        super(HDAManager, self).__init__(app)
+        super().__init__(app)
         self.user_manager = users.UserManager(app)
+
+    def get_owned_ids(self, object_ids, history=None):
+        """Get owned IDs.
+        """
+        filters = [self.model_class.id.in_(object_ids), self.model_class.history_id == history.id]
+        return self.list(filters=filters)
 
     # .... security and permissions
     def is_accessible(self, hda, user, **kwargs):
@@ -57,7 +63,7 @@ class HDAManager(datasets.DatasetAssociationManager,
         #   I can not access that dataset even if it's in my history
         # if self.is_owner( hda, user, **kwargs ):
         #     return True
-        return super(HDAManager, self).is_accessible(hda, user, **kwargs)
+        return super().is_accessible(hda, user, **kwargs)
 
     def is_owner(self, hda, user, current_history=None, **kwargs):
         """
@@ -135,7 +141,7 @@ class HDAManager(datasets.DatasetAssociationManager,
         quota_amount_reduction = 0
         if user:
             quota_amount_reduction = hda.quota_amount(user)
-        super(HDAManager, self).purge(hda, flush=flush)
+        super().purge(hda, flush=flush)
         # decrease the user's space used
         if quota_amount_reduction:
             user.adjust_total_disk_usage(-quota_amount_reduction)
@@ -241,7 +247,7 @@ class HDASerializer(  # datasets._UnflattenedMetadataDatasetAssociationSerialize
     model_manager_class = HDAManager
 
     def __init__(self, app):
-        super(HDASerializer, self).__init__(app)
+        super().__init__(app)
         self.hda_manager = self.manager
 
         self.default_view = 'summary'
@@ -289,12 +295,16 @@ class HDASerializer(  # datasets._UnflattenedMetadataDatasetAssociationSerialize
             'display_types',
             'visualizations',
 
+            'validated_state',
+            'validated_state_message',
+
             # 'url',
             'download_url',
 
             'annotation',
 
-            'api_type'
+            'api_type',
+            'created_from_basename',
         ], include_keys_from='summary')
 
         self.add_view('extended', [
@@ -309,7 +319,7 @@ class HDASerializer(  # datasets._UnflattenedMetadataDatasetAssociationSerialize
         ])
 
     def add_serializers(self):
-        super(HDASerializer, self).add_serializers()
+        super().add_serializers()
         taggable.TaggableSerializerMixin.add_serializers(self)
         annotatable.AnnotatableSerializerMixin.add_serializers(self)
 
@@ -348,7 +358,8 @@ class HDASerializer(  # datasets._UnflattenedMetadataDatasetAssociationSerialize
             # TODO: to DatasetAssociationSerializer
             'accessible'    : lambda i, k, user=None, **c: self.manager.is_accessible(i, user, **c),
             'api_type'      : lambda *a, **c: 'file',
-            'type'          : lambda *a, **c: 'file'
+            'type'          : lambda *a, **c: 'file',
+            'created_from_basename' : lambda i, k, **c: i.created_from_basename,
         })
 
     def serialize(self, hda, keys, user=None, **context):
@@ -358,7 +369,7 @@ class HDASerializer(  # datasets._UnflattenedMetadataDatasetAssociationSerialize
         # TODO: to DatasetAssociationSerializer
         if not self.manager.is_accessible(hda, user, **context):
             keys = self._view_to_keys('inaccessible')
-        return super(HDASerializer, self).serialize(hda, keys, user=user, **context)
+        return super().serialize(hda, keys, user=user, **context)
 
     def serialize_display_apps(self, hda, key, trans=None, **context):
         """
@@ -448,11 +459,11 @@ class HDADeserializer(datasets.DatasetAssociationDeserializer,
     model_manager_class = HDAManager
 
     def __init__(self, app):
-        super(HDADeserializer, self).__init__(app)
+        super().__init__(app)
         self.hda_manager = self.manager
 
     def add_deserializers(self):
-        super(HDADeserializer, self).add_deserializers()
+        super().add_deserializers()
         taggable.TaggableDeserializerMixin.add_deserializers(self)
         annotatable.AnnotatableDeserializerMixin.add_deserializers(self)
 
@@ -473,6 +484,6 @@ class HDAFilterParser(datasets.DatasetAssociationFilterParser,
     model_class = model.HistoryDatasetAssociation
 
     def _add_parsers(self):
-        super(HDAFilterParser, self)._add_parsers()
+        super()._add_parsers()
         taggable.TaggableFilterMixin._add_parsers(self)
         annotatable.AnnotatableFilterMixin._add_parsers(self)

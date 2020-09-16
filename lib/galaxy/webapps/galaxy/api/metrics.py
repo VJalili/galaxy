@@ -7,8 +7,8 @@ API operations for for querying and recording user metrics from some client
 import datetime
 import logging
 
-from galaxy.web import _future_expose_api_anonymous as expose_api_anonymous
-from galaxy.web.base.controller import BaseAPIController
+from galaxy.web import expose_api_anonymous
+from galaxy.webapps.base.controller import BaseAPIController
 
 log = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ log = logging.getLogger(__name__)
 class MetricsController(BaseAPIController):
 
     def __init__(self, app):
-        super(MetricsController, self).__init__(app)
+        super().__init__(app)
         #: set to true to send additional debugging info to the log
         self.debugging = True
 

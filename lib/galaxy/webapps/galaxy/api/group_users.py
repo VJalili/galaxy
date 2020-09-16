@@ -4,15 +4,16 @@ API operations on Group objects.
 import logging
 
 from galaxy import web
-from galaxy.web.base.controller import BaseAPIController, url_for
+from galaxy.util import unicodify
+from galaxy.webapps.base.controller import BaseAPIController, url_for
 
 log = logging.getLogger(__name__)
 
 
 class GroupUsersAPIController(BaseAPIController):
 
-    @web.expose_api
     @web.require_admin
+    @web.legacy_expose_api
     def index(self, trans, group_id, **kwd):
         """
         GET /api/groups/{encoded_group_id}/users
@@ -36,12 +37,12 @@ class GroupUsersAPIController(BaseAPIController):
                                  url=url_for('group_user', group_id=group_id, id=encoded_id, )))
         except Exception as e:
             rval = "Error in group API at listing users"
-            log.error(rval + ": %s" % str(e))
+            log.error(rval + ": %s", unicodify(e))
             trans.response.status = 500
         return rval
 
-    @web.expose_api
     @web.require_admin
+    @web.legacy_expose_api
     def show(self, trans, id, group_id, **kwd):
         """
         GET /api/groups/{encoded_group_id}/users/{encoded_user_id}
@@ -60,14 +61,14 @@ class GroupUsersAPIController(BaseAPIController):
                                 email=user.email,
                                 url=url_for('group_user', group_id=group_id, id=user_id))  # TODO Fix This
             if not item:
-                item = "user %s not in group %s" % (user.email, group.name)
+                item = "user {} not in group {}".format(user.email, group.name)
         except Exception as e:
-            item = "Error in group_user API group %s user %s" % (group.name, user.email)
-            log.error(item + ": %s" % str(e))
+            item = "Error in group_user API group {} user {}".format(group.name, user.email)
+            log.error(item + ": %s", unicodify(e))
         return item
 
-    @web.expose_api
     @web.require_admin
+    @web.legacy_expose_api
     def update(self, trans, id, group_id, **kwd):
         """
         PUT /api/groups/{encoded_group_id}/users/{encoded_user_id}
@@ -94,12 +95,12 @@ class GroupUsersAPIController(BaseAPIController):
                             email=user.email,
                             url=url_for('group_user', group_id=group_id, id=user_id))
         except Exception as e:
-            item = "Error in group_user API Adding user %s to group %s" % (user.email, group.name)
-            log.error(item + ": %s" % str(e))
+            item = "Error in group_user API Adding user {} to group {}".format(user.email, group.name)
+            log.error(item + ": %s", unicodify(e))
         return item
 
-    @web.expose_api
     @web.require_admin
+    @web.legacy_expose_api
     def delete(self, trans, id, group_id, **kwd):
         """
         DELETE /api/groups/{encoded_group_id}/users/{encoded_user_id}
@@ -119,8 +120,8 @@ class GroupUsersAPIController(BaseAPIController):
                                 email=user.email,
                                 url=url_for('group_user', group_id=group_id, id=user_id))
             if not item:
-                item = "user %s not in group %s" % (user.email, group.name)
+                item = "user {} not in group {}".format(user.email, group.name)
         except Exception as e:
-            item = "Error in group_user API Removing user %s from group %s" % (user.email, group.name)
-            log.error(item + ": %s" % str(e))
+            item = "Error in group_user API Removing user {} from group {}".format(user.email, group.name)
+            log.error(item + ": %s", unicodify(e))
         return item

@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 import abc
 import logging
 import mimetypes
@@ -8,11 +6,11 @@ import shutil
 import string
 import tempfile
 import zipfile
-from cgi import escape
+from collections import OrderedDict
 from inspect import isclass
 
-import six
 import webob.exc
+from markupsafe import escape
 
 from galaxy import util
 from galaxy.datatypes.metadata import MetadataElement  # import directly to maintain ease of use in Datatype class definitions
@@ -25,7 +23,6 @@ from galaxy.util import (
     unicodify
 )
 from galaxy.util.bunch import Bunch
-from galaxy.util.odict import odict
 from galaxy.util.sanitize_html import sanitize_html
 from . import (
     dataproviders,
@@ -46,6 +43,37 @@ valid_strand = ['+', '-', '.']
 
 DOWNLOAD_FILENAME_PATTERN_DATASET = "Galaxy${hid}-[${name}].${ext}"
 DOWNLOAD_FILENAME_PATTERN_COLLECTION_ELEMENT = "Galaxy${hdca_hid}-[${hdca_name}__${element_identifier}].${ext}"
+DEFAULT_MAX_PEEK_SIZE = 1000000  # 1 MB
+
+
+class DatatypeValidation:
+
+    def __init__(self, state, message):
+        self.state = state
+        self.message = message
+
+    @staticmethod
+    def validated():
+        return DatatypeValidation("ok", "Dataset validated by datatype validator.")
+
+    @staticmethod
+    def invalid(message):
+        return DatatypeValidation("invalid", message)
+
+    @staticmethod
+    def unvalidated():
+        return DatatypeValidation("unknown", "Dataset validation unimplemented for this datatype.")
+
+    def __repr__(self):
+        return "DatatypeValidation[state={},message={}]".format(self.state, self.message)
+
+
+def validate(dataset_instance):
+    try:
+        datatype_validation = dataset_instance.datatype.validate(dataset_instance)
+    except Exception as e:
+        datatype_validation = DatatypeValidation.invalid("Problem running datatype validation method [%s]" % str(e))
+    return datatype_validation
 
 
 class DataMeta(abc.ABCMeta):
@@ -60,9 +88,8 @@ class DataMeta(abc.ABCMeta):
         metadata.Statement.process(cls)
 
 
-@six.add_metaclass(DataMeta)
 @dataproviders.decorators.has_dataproviders
-class Data(object):
+class Data(metaclass=DataMeta):
     """
     Base class for all datatypes.  Implements basic interfaces as well
     as class methods for metadata.
@@ -100,7 +127,7 @@ class Data(object):
     allow_datatype_change = True
     # Composite datatypes
     composite_type = None
-    composite_files = odict()
+    composite_files = OrderedDict()
     primary_file_name = 'index'
     # A per datatype setting (inherited): max file size (in bytes) for setting optional metadata
     _max_optional_metadata_filesize = None
@@ -116,7 +143,7 @@ class Data(object):
         object.__init__(self, **kwd)
         self.supported_display_apps = self.supported_display_apps.copy()
         self.composite_files = self.composite_files.copy()
-        self.display_applications = odict()
+        self.display_applications = OrderedDict()
 
     def get_raw_data(self, dataset):
         """Returns the full data. To stream it open the file_name and read/write as needed"""
@@ -132,7 +159,6 @@ class Data(object):
 
     def groom_dataset_content(self, file_name):
         """This function is called on an output dataset file if dataset_content_needs_grooming returns True."""
-        pass
 
     def init_meta(self, dataset, copy_from=None):
         # Metadata should be left mostly uninitialized.  Dataset will
@@ -148,12 +174,14 @@ class Data(object):
         """Unimplemented method, allows guessing of metadata from contents of file"""
         return True
 
-    def missing_meta(self, dataset, check=[], skip=[]):
+    def missing_meta(self, dataset, check=None, skip=None):
         """
         Checks for empty metadata values, Returns True if non-optional metadata is missing
         Specifying a list of 'check' values will only check those names provided; when used, optionality is ignored
         Specifying a list of 'skip' items will return True even when a named metadata value is missing
         """
+        if skip is None:
+            skip = []
         if check:
             to_check = ((to_check, dataset.metadata.get(to_check)) for to_check in check)
         else:
@@ -210,7 +238,7 @@ class Data(object):
             out.append('</table>')
             out = "".join(out)
         except Exception as exc:
-            out = "Can't create peek %s" % str(exc)
+            out = "Can't create peek: %s" % unicodify(exc)
         return out
 
     def _archive_main_file(self, archive, display_name, data_filename):
@@ -226,7 +254,7 @@ class Data(object):
         archname = '%s.html' % display_name  # fake the real nature of the html file
         try:
             archive.add(data_filename, archname)
-        except IOError:
+        except OSError:
             error = True
             log.exception("Unable to add composite parent %s to temporary library download archive", data_filename)
             msg = "Unable to create archive for download, please report this error"
@@ -281,7 +309,7 @@ class Data(object):
 
                 display_name = os.path.splitext(outfname)[0]
                 if not display_name.endswith(ext):
-                    display_name = '%s_%s' % (display_name, ext)
+                    display_name = '{}_{}'.format(display_name, ext)
 
                 error, msg = self._archive_main_file(archive, display_name, path)[:2]
                 if not error:
@@ -289,7 +317,7 @@ class Data(object):
                     for fpath, rpath in self.__archive_extra_files_path(extra_files_path=efp):
                         try:
                             archive.add(fpath, rpath)
-                        except IOError:
+                        except OSError:
                             error = True
                             log.exception("Unable to add %s to temporary library download archive", rpath)
                             msg = "Unable to create archive for download, please report this error"
@@ -307,7 +335,7 @@ class Data(object):
                         outext = 'tgz'
                         if params.do_action == 'tbz':
                             outext = 'tbz'
-                        trans.response.headers["Content-Disposition"] = 'attachment; filename="%s.%s"' % (outfname, outext)
+                        trans.response.headers["Content-Disposition"] = 'attachment; filename="{}.{}"'.format(outfname, outext)
                         archive.wsgi_status = trans.response.wsgi_status()
                         archive.wsgi_headeritems = trans.response.wsgi_headeritems()
                         return archive.stream
@@ -315,7 +343,7 @@ class Data(object):
 
     def __archive_extra_files_path(self, extra_files_path):
         """Yield filepaths and relative filepaths for files in extra_files_path"""
-        for root, dirs, files in os.walk(extra_files_path):
+        for root, _, files in os.walk(extra_files_path):
             for fname in files:
                 fpath = os.path.join(root, fname)
                 rpath = os.path.relpath(fpath, extra_files_path)
@@ -341,14 +369,14 @@ class Data(object):
         rel_paths = []
         file_paths = []
         if dataset.extension in composite_extensions:
-            main_file = "%s.%s" % (name, 'html')
+            main_file = "{}.{}".format(name, 'html')
             rel_paths.append(main_file)
             file_paths.append(dataset.file_name)
             for fpath, rpath in self.__archive_extra_files_path(dataset.extra_files_path):
                 rel_paths.append(os.path.join(name, rpath))
                 file_paths.append(fpath)
         else:
-            rel_paths.append("%s.%s" % (name or dataset.file_name, dataset.extension))
+            rel_paths.append("{}.{}".format(name or dataset.file_name, dataset.extension))
             file_paths.append(dataset.file_name)
         return zip(file_paths, rel_paths)
 
@@ -368,11 +396,12 @@ class Data(object):
         # Prevent IE8 from sniffing content type since we're explicit about it.  This prevents intentionally text/plain
         # content from being rendered in the browser
         trans.response.headers['X-Content-Type-Options'] = 'nosniff'
-        if isinstance(data, six.string_types):
+        if isinstance(data, str):
             return smart_str(data)
         if filename and filename != "index":
             # For files in extra_files_path
-            file_path = trans.app.object_store.get_filename(data.dataset, extra_dir='dataset_%s_files' % data.dataset.id, alt_name=filename)
+            extra_dir = data.dataset.extra_files_path_name
+            file_path = trans.app.object_store.get_filename(data.dataset, extra_dir=extra_dir, alt_name=filename)
             if os.path.exists(file_path):
                 if os.path.isdir(file_path):
                     with tempfile.NamedTemporaryFile(mode='w', delete=False, dir=trans.app.config.new_file_path, prefix='gx_html_autocreate_') as tmp_fh:
@@ -393,7 +422,7 @@ class Data(object):
                             # href = url_for(controller='dataset', action='display',
                             # dataset_id=trans.security.encode_id(data.dataset.id),
                             # preview=preview, filename=fname, to_ext=to_ext)
-                            tmp_fh.write('<tr bgcolor="%s"><td>%s</td></tr>\n' % (bgcolor, escape(fname)))
+                            tmp_fh.write('<tr bgcolor="{}"><td>{}</td></tr>\n'.format(bgcolor, escape(fname)))
                         tmp_fh.write('</table></body></html>\n')
                     return self._yield_user_file_content(trans, data, tmp_file_name)
                 mime = mimetypes.guess_type(file_path)[0]
@@ -405,7 +434,7 @@ class Data(object):
                 self._clean_and_set_mime_type(trans, mime)
                 return self._yield_user_file_content(trans, data, file_path)
             else:
-                return webob.exc.HTTPNotFound("Could not find '%s' on the extra files path %s." % (filename, file_path))
+                return webob.exc.HTTPNotFound("Could not find '{}' on the extra files path {}.".format(filename, file_path))
         self._clean_and_set_mime_type(trans, data.get_mime())
 
         trans.log_event("Display dataset id: %s" % str(data.id))
@@ -421,7 +450,7 @@ class Data(object):
                 return open(data.file_name, 'rb')
         if not os.path.exists(data.file_name):
             raise webob.exc.HTTPNotFound("File Not Found (%s)." % data.file_name)
-        max_peek_size = 1000000  # 1 MB
+        max_peek_size = DEFAULT_MAX_PEEK_SIZE  # 1 MB
         if isinstance(data.datatype, datatypes.text.Html):
             max_peek_size = 10000000  # 10 MB for html
         preview = util.string_as_bool(preview)
@@ -433,19 +462,48 @@ class Data(object):
                                               truncated_data=open(data.file_name, 'rb').read(max_peek_size),
                                               data=data)
 
+    def display_as_markdown(self, dataset_instance, markdown_format_helpers):
+        """Prepare for embedding dataset into a basic Markdown document.
+
+        This is a somewhat experimental interface and should not be implemented
+        on datatypes not tightly tied to a Galaxy version (e.g. datatypes in the
+        Tool Shed).
+
+        Speaking very losely - the datatype should should load a bounded amount
+        of data from the supplied dataset instance and prepare for embedding it
+        into Markdown. This should be relatively vanilla Markdown - the result of
+        this is bleached and it should not contain nested Galaxy Markdown
+        directives.
+
+        If the data cannot reasonably be displayed, just indicate this and do
+        not throw an exception.
+        """
+        if self.file_ext in {'png', 'jpg'}:
+            return self.handle_dataset_as_image(dataset_instance)
+        if self.is_binary:
+            result = "*cannot display binary content*\n"
+        else:
+            with open(dataset_instance.file_name) as f:
+                contents = f.read(DEFAULT_MAX_PEEK_SIZE)
+            result = markdown_format_helpers.literal_via_fence(contents)
+            if len(contents) == DEFAULT_MAX_PEEK_SIZE:
+                result += markdown_format_helpers.indicate_data_truncated()
+        return result
+
     def _yield_user_file_content(self, trans, from_dataset, filename):
         """This method is responsible for sanitizing the HTML if needed."""
         if trans.app.config.sanitize_all_html and trans.response.get_content_type() == "text/html":
             # Sanitize anytime we respond with plain text/html content.
-            # Check to see if this dataset's parent job is whitelisted
+            # Check to see if this dataset's parent job is allowlisted
             # We cannot currently trust imported datasets for rendering.
-            if not from_dataset.creating_job.imported and from_dataset.creating_job.tool_id in trans.app.config.sanitize_whitelist:
+            if not from_dataset.creating_job.imported and from_dataset.creating_job.tool_id in trans.app.config.sanitize_allowlist:
                 return open(filename, mode='rb')
 
             # This is returning to the browser, it needs to be encoded.
             # TODO Ideally this happens a layer higher, but this is a bad
             # issue affecting many tools
-            return sanitize_html(open(filename, 'r').read()).encode('utf-8')
+            with open(filename) as f:
+                return sanitize_html(f.read()).encode('utf-8')
 
         return open(filename, mode='rb')
 
@@ -501,10 +559,6 @@ class Data(object):
         except Exception:
             return "info unavailable"
 
-    def validate(self, dataset):
-        """Unimplemented validate, return no exceptions"""
-        return list()
-
     def repair_methods(self, dataset):
         """Unimplemented method, returns dict with method/option for repairing errors"""
         return None
@@ -544,7 +598,7 @@ class Data(object):
         return self.display_applications.get(key, default)
 
     def get_display_applications_by_dataset(self, dataset, trans):
-        rval = odict()
+        rval = OrderedDict()
         for key, value in self.display_applications.items():
             value = value.filter_by_dataset(dataset, trans)
             if value.links:
@@ -569,7 +623,7 @@ class Data(object):
                 return getattr(self, self.supported_display_apps[type]['file_function'])(dataset, **kwd)
         except Exception:
             log.exception('Function %s is referred to in datatype %s for displaying as type %s, but is not accessible', self.supported_display_apps[type]['file_function'], self.__class__.__name__, type)
-        return "This display type (%s) is not implemented for this datatype (%s)." % (type, dataset.ext)
+        return "This display type ({}) is not implemented for this datatype ({}).".format(type, dataset.ext)
 
     def get_display_links(self, dataset, type, app, base_url, target_frame='_blank', **kwd):
         """
@@ -599,7 +653,7 @@ class Data(object):
         converter = trans.app.datatypes_registry.get_converter_by_target_type(original_dataset.ext, target_type)
 
         if converter is None:
-            raise Exception("A converter does not exist for %s to %s." % (original_dataset.ext, target_type))
+            raise Exception("A converter does not exist for {} to {}.".format(original_dataset.ext, target_type))
         # Generate parameter dictionary
         params = {}
         # determine input parameter name and add to params
@@ -625,7 +679,7 @@ class Data(object):
                 value.visible = False
         if return_output:
             return converted_dataset
-        return "The file conversion of %s on data %s has been added to the Queue." % (converter.name, original_dataset.hid)
+        return "The file conversion of {} on data {} has been added to the Queue.".format(converter.name, original_dataset.hid)
 
     # We need to clear associated files before we set metadata
     # so that as soon as metadata starts to be set, e.g. implicitly converted datasets are deleted and no longer available 'while' metadata is being set, not just after
@@ -664,7 +718,7 @@ class Data(object):
 
     @property
     def writable_files(self, dataset=None):
-        files = odict()
+        files = OrderedDict()
         if self.composite_type != 'auto_primary_file':
             files[self.primary_file_name] = self.__new_composite_file(self.primary_file_name)
         for key, value in self.get_composite_files(dataset=dataset).items():
@@ -680,7 +734,7 @@ class Data(object):
                     meta_value = self.metadata_spec[composite_file.substitute_name_with_metadata].default
                 return key % meta_value
             return key
-        files = odict()
+        files = OrderedDict()
         for key, value in self.composite_files.items():
             files[substitute_composite_key(key, value)] = value
         return files
@@ -741,6 +795,9 @@ class Data(object):
             return self.dataproviders[data_format](self, dataset, **settings)
         raise dataproviders.exceptions.NoProviderAvailable(self, data_format)
 
+    def validate(self, dataset, **kwd):
+        return DatatypeValidation.unvalidated()
+
     @dataproviders.decorators.dataprovider_factory('base')
     def base_dataprovider(self, dataset, **settings):
         dataset_source = dataproviders.dataset.DatasetDataProvider(dataset)
@@ -789,10 +846,14 @@ class Text(Data):
         Perform a rough estimate by extrapolating number of lines from a small read.
         """
         sample_size = 1048576
-        with open(dataset.file_name) as dataset_fh:
-            dataset_read = dataset_fh.read(sample_size)
-        sample_lines = dataset_read.count('\n')
-        est_lines = int(sample_lines * (float(dataset.get_size()) / float(sample_size)))
+        try:
+            with compression_utils.get_fileobj(dataset.file_name) as dataset_fh:
+                dataset_read = dataset_fh.read(sample_size)
+            sample_lines = dataset_read.count('\n')
+            est_lines = int(sample_lines * (float(dataset.get_size()) / float(sample_size)))
+        except UnicodeDecodeError:
+            log.error('Unable to estimate lines in file {}'.format(dataset.file_name))
+            est_lines = None
         return est_lines
 
     def count_data_lines(self, dataset):
@@ -800,12 +861,23 @@ class Text(Data):
         Count the number of lines of data in dataset,
         skipping all blank lines and comments.
         """
+        CHUNK_SIZE = 2 ** 15  # 32Kb
         data_lines = 0
         with compression_utils.get_fileobj(dataset.file_name) as in_file:
-            for line in in_file:
-                line = line.strip()
-                if line and not line.startswith('#'):
-                    data_lines += 1
+            # FIXME: Potential encoding issue can prevent the ability to iterate over lines
+            # causing set_meta process to fail otherwise OK jobs. A better solution than
+            # a silent try/except is desirable.
+            try:
+                while True:
+                    line = in_file.readline(CHUNK_SIZE)
+                    if not line:
+                        break
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        data_lines += 1
+            except UnicodeDecodeError:
+                log.error('Unable to count lines in file {}'.format(dataset.file_name))
+                data_lines = None
         return data_lines
 
     def set_peek(self, dataset, line_count=None, is_multi_byte=False, WIDTH=256, skipchars=None, line_wrap=True):
@@ -818,7 +890,7 @@ class Text(Data):
             if line_count is None:
                 # See if line_count is stored in the metadata
                 if dataset.metadata.data_lines:
-                    dataset.blurb = "%s %s" % (util.commaify(str(dataset.metadata.data_lines)), inflector.cond_plural(dataset.metadata.data_lines, self.line_class))
+                    dataset.blurb = "{} {}".format(util.commaify(str(dataset.metadata.data_lines)), inflector.cond_plural(dataset.metadata.data_lines, self.line_class))
                 else:
                     # Number of lines is not known ( this should not happen ), and auto-detect is
                     # needed to set metadata
@@ -826,13 +898,19 @@ class Text(Data):
                     if int(dataset.get_size()) <= 1048576:
                         # Small dataset, recount all lines and reset peek afterward.
                         lc = self.count_data_lines(dataset)
-                        dataset.metadata.data_lines = lc
-                        dataset.blurb = "%s %s" % (util.commaify(str(lc)), inflector.cond_plural(lc, self.line_class))
+                        if lc is not None:
+                            dataset.metadata.data_lines = lc
+                            dataset.blurb = "{} {}".format(util.commaify(str(lc)), inflector.cond_plural(lc, self.line_class))
+                        else:
+                            dataset.blurb = "Error: Cannot count lines in dataset"
                     else:
                         est_lines = self.estimate_file_lines(dataset)
-                        dataset.blurb = "~%s %s" % (util.commaify(util.roundify(str(est_lines))), inflector.cond_plural(est_lines, self.line_class))
+                        if est_lines is not None:
+                            dataset.blurb = "~{} {}".format(util.commaify(util.roundify(str(est_lines))), inflector.cond_plural(est_lines, self.line_class))
+                        else:
+                            dataset.blurb = "Error: Cannot estimate lines in dataset"
             else:
-                dataset.blurb = "%s %s" % (util.commaify(str(line_count)), inflector.cond_plural(line_count, self.line_class))
+                dataset.blurb = "{} {}".format(util.commaify(str(line_count)), inflector.cond_plural(line_count, self.line_class))
         else:
             dataset.peek = 'file does not exist'
             dataset.blurb = 'file purged from disk'
@@ -877,7 +955,7 @@ class Text(Data):
         else:
             raise Exception('Unsupported split mode %s' % split_params['split_mode'])
 
-        f = open(input_files[0], 'r')
+        f = open(input_files[0])
         try:
             chunk_idx = 0
             file_done = False
@@ -902,7 +980,7 @@ class Text(Data):
                     part_file.write(a_line)
                     lines_remaining -= 1
         except Exception as e:
-            log.error('Unable to split files: %s' % str(e))
+            log.error('Unable to split files: %s', unicodify(e))
             raise
         finally:
             f.close()
@@ -946,7 +1024,6 @@ class LineCount(Text):
     Dataset contains a single line with a single integer that denotes the
     line count for a related dataset. Used for custom builds.
     """
-    pass
 
 
 class Newick(Text):
@@ -1022,8 +1099,14 @@ def get_file_peek(file_name, is_multi_byte=False, WIDTH=256, LINE_COUNT=5, skipc
     :param is_multi_byte: deprecated
     :type  is_multi_byte: bool
 
-    >>> fname = get_test_fname('4.bed')
-    >>> assert get_file_peek(fname, LINE_COUNT=1) == u'chr22\\t30128507\\t31828507\\tuc003bnx.1_cds_2_0_chr22_29227_f\\t0\\t+\\n'
+    >>> def assert_peek_is(file_name, expected, *args, **kwd):
+    ...     path = get_test_fname(file_name)
+    ...     peek = get_file_peek(path, *args, **kwd)
+    ...     assert peek == expected, "%s != %s" % (peek, expected)
+    >>> assert_peek_is('0_nonewline', u'0')
+    >>> assert_peek_is('0.txt', u'0\\n')
+    >>> assert_peek_is('4.bed', u'chr22\\t30128507\\t31828507\\tuc003bnx.1_cds_2_0_chr22_29227_f\\t0\\t+\\n', LINE_COUNT=1)
+    >>> assert_peek_is('1.bed', u'chr1\\t147962192\\t147962580\\tCCDS989.1_cds_0_0_chr1_147962193_r\\t0\\t-\\nchr1\\t147984545\\t147984630\\tCCDS990.1_cds_0_0_chr1_147984546_f\\t0\\t+\\n', LINE_COUNT=2)
     """
     # Set size for file.readline() to a negative number to force it to
     # read until either a newline or EOF.  Needed for datasets with very
@@ -1034,20 +1117,27 @@ def get_file_peek(file_name, is_multi_byte=False, WIDTH=256, LINE_COUNT=5, skipc
         skipchars = []
     lines = []
     count = 0
+
+    last_line_break = False
     with compression_utils.get_fileobj(file_name, "U") as temp:
         while count < LINE_COUNT:
             try:
                 line = temp.readline(WIDTH)
             except UnicodeDecodeError:
                 return "binary file"
-            if not line_wrap:
-                if line.endswith('\n'):
-                    line = line[:-1]
-                else:
-                    while True:
-                        i = temp.read(1)
-                        if not i or i == '\n':
-                            break
+            if line == "":
+                break
+            last_line_break = False
+            if line.endswith('\n'):
+                line = line[:-1]
+                last_line_break = True
+            elif not line_wrap:
+                while True:
+                    i = temp.read(1)
+                    if i == '\n':
+                        last_line_break = True
+                    if not i or i == '\n':
+                        break
             skip_line = False
             for skipchar in skipchars:
                 if line.startswith(skipchar):
@@ -1056,4 +1146,4 @@ def get_file_peek(file_name, is_multi_byte=False, WIDTH=256, LINE_COUNT=5, skipc
             if not skip_line:
                 lines.append(line)
                 count += 1
-    return '\n'.join(lines)
+    return '\n'.join(lines) + ('\n' if last_line_break else '')

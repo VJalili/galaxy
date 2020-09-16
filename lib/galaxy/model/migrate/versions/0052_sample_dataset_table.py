@@ -2,7 +2,6 @@
 Migration script to add the sample_dataset table and remove the 'dataset_files' column
 from the 'sample' table
 """
-from __future__ import print_function
 
 import datetime
 import logging
@@ -12,28 +11,11 @@ from sqlalchemy import Column, DateTime, ForeignKey, Integer, MetaData, Table, T
 from sqlalchemy.exc import NoSuchTableError
 
 from galaxy.model.custom_types import TrimmedString
+from galaxy.model.migrate.versions.util import localtimestamp, nextval
 
 now = datetime.datetime.utcnow
 log = logging.getLogger(__name__)
 metadata = MetaData()
-
-
-def nextval(migrate_engine, table, col='id'):
-    if migrate_engine.name in ['postgres', 'postgresql']:
-        return "nextval('%s_%s_seq')" % (table, col)
-    elif migrate_engine.name in ['mysql', 'sqlite']:
-        return "null"
-    else:
-        raise Exception('Unable to convert data for unknown database type: %s' % migrate_engine.name)
-
-
-def localtimestamp(migrate_engine):
-    if migrate_engine.name in ['mysql', 'postgres', 'postgresql']:
-        return "LOCALTIMESTAMP"
-    elif migrate_engine.name == 'sqlite':
-        return "current_date || ' ' || current_time"
-    else:
-        raise Exception('Unable to convert data for unknown database type: %s' % migrate_engine.name)
 
 
 SampleDataset_table = Table('sample_dataset', metadata,
@@ -49,9 +31,10 @@ SampleDataset_table = Table('sample_dataset', metadata,
 
 
 def upgrade(migrate_engine):
-    metadata.bind = migrate_engine
     print(__doc__)
+    metadata.bind = migrate_engine
     metadata.reflect()
+
     try:
         SampleDataset_table.create()
     except Exception:
@@ -91,5 +74,4 @@ def upgrade(migrate_engine):
 
 
 def downgrade(migrate_engine):
-    metadata.bind = migrate_engine
     pass

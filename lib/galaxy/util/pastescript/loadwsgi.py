@@ -9,9 +9,9 @@ import re
 import sys
 
 import pkg_resources
-from six import iteritems
 from six.moves.urllib.parse import unquote
 
+from galaxy.util.getargspec import getfullargspec
 from galaxy.util.properties import NicerConfigParser
 
 
@@ -31,12 +31,8 @@ def print_(template, *args, **kwargs):
     sys.stdout.writelines(template)
 
 
-if sys.version_info < (3, 0):
-    def reraise(t, e, tb):
-        exec('raise t, e, tb', dict(t=t, e=e, tb=tb))
-else:
-    def reraise(t, e, tb):
-        exec('raise e from tb', dict(e=e, tb=tb))
+def reraise(t, e, tb):
+    exec('raise e from tb', dict(e=e, tb=tb))
 
 # ---- from paste.deploy.util ----------------------------------------
 
@@ -58,11 +54,11 @@ def fix_type_error(exc_info, callable, varargs, kwargs):
     if exc_info is None:
         exc_info = sys.exc_info()
     if (exc_info[0] != TypeError or
-            str(exc_info[1]).find('arguments') == -1 or
+            str(exc_info[1]).find('argument') == -1 or
             getattr(exc_info[1], '_type_error_fixed', False)):
         return exc_info
     exc_info[1]._type_error_fixed = True
-    argspec = inspect.formatargspec(*inspect.getargspec(callable))
+    argspec = inspect.formatargspec(*getfullargspec(callable))
     args = ', '.join(map(_short_repr, varargs))
     if kwargs and args:
         args += ', '
@@ -70,7 +66,7 @@ def fix_type_error(exc_info, callable, varargs, kwargs):
         kwargs = sorted(kwargs.keys())
         args += ', '.join('%s=...' % n for n in kwargs)
     gotspec = '(%s)' % args
-    msg = '%s; got %s, wanted %s' % (exc_info[1], gotspec, argspec)
+    msg = '{}; got {}, wanted {}'.format(exc_info[1], gotspec, argspec)
     exc_info[1].args = (msg,)
     return exc_info
 
@@ -148,7 +144,7 @@ def _flatten(lst):
 ############################################################
 
 
-class _ObjectType(object):
+class _ObjectType:
 
     name = None
     egg_protocols = None
@@ -160,7 +156,7 @@ class _ObjectType(object):
         self.config_prefixes = [_aslist(p) for p in _aslist(self.config_prefixes)]
 
     def __repr__(self):
-        return '<%s protocols=%r prefixes=%r>' % (
+        return '<{} protocols={!r} prefixes={!r}>'.format(
             self.name, self.egg_protocols, self.config_prefixes)
 
     def invoke(self, context):
@@ -393,7 +389,7 @@ _loaders['call'] = _loadfunc
 ############################################################
 
 
-class _Loader(object):
+class _Loader:
 
     def get_app(self, name=None, global_conf=None):
         return self.app_context(
@@ -444,7 +440,7 @@ class ConfigLoader(_Loader):
             self.parser.read_file(f)
 
     def update_defaults(self, new_defaults, overwrite=True):
-        for key, value in iteritems(new_defaults):
+        for key, value in new_defaults.items():
             if not overwrite and key in self.parser._defaults:
                 continue
             self.parser._defaults[key] = value
@@ -740,7 +736,7 @@ class FuncLoader(_Loader):
         )
 
 
-class LoaderContext(object):
+class LoaderContext:
 
     def __init__(self, obj, object_type, protocol,
                  global_conf, local_conf, loader,
@@ -773,4 +769,3 @@ class AttrDict(dict):
     """
     A dictionary that can be assigned to.
     """
-    pass

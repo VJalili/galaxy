@@ -1,15 +1,15 @@
 import string
 import unittest
-from xml.etree.ElementTree import XML
 
 from galaxy import model
 from galaxy.exceptions import UserActivationRequiredException
+from galaxy.tool_util.parser.output_objects import ToolOutput
 from galaxy.tools.actions import (
     DefaultToolAction,
     determine_output_format,
     on_text_for_names
 )
-from galaxy.tools.parser.output_objects import ToolOutput
+from galaxy.util import XML
 from .. import tools_support
 
 
@@ -134,12 +134,13 @@ class DefaultToolActionTestCase(unittest.TestCase, tools_support.UsesApp, tools_
         if incoming is None:
             incoming = dict(param1="moo")
         self._init_tool(contents)
-        return self.action.execute(
+        job, out_data, _, _ = self.action.execute(
             tool=self.tool,
             trans=self.trans,
             history=self.history,
             incoming=incoming,
         )
+        return job, out_data
 
 
 def test_determine_output_format():
@@ -273,6 +274,9 @@ class MockObjectStore(object):
         self.created_datasets = []
         self.first_create = True
         self.object_store_id = "mycoolid"
+
+    def exists(self, *args, **kwargs):
+        return True
 
     def create(self, dataset):
         self.created_datasets.append(dataset)

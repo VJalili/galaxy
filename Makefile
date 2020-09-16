@@ -1,16 +1,16 @@
+# Location of virtualenv used for development.
+VENV?=.venv
+# Source virtualenv to execute command (flake8, sphinx, twine, etc...)
+IN_VENV=if [ -f $(VENV)/bin/activate ]; then . $(VENV)/bin/activate; fi;
 RELEASE_CURR:=16.01
-RELEASE_CURR_MINOR_NEXT:=$(shell python scripts/bootstrap_history.py --print-next-minor-version)
+RELEASE_CURR_MINOR_NEXT:=$(shell $(IN_VENV) python scripts/bootstrap_history.py --print-next-minor-version)
 RELEASE_NEXT:=16.04
 # TODO: This needs to be updated with create_release_rc
 #RELEASE_NEXT_BRANCH:=release_$(RELEASE_NEXT)
 RELEASE_NEXT_BRANCH:=dev
 RELEASE_UPSTREAM:=upstream
 MY_UPSTREAM:=origin
-# Location of virtualenv used for development.
-VENV?=.venv
-# Source virtualenv to execute command (flake8, sphinx, twine, etc...)
-IN_VENV=if [ -f $(VENV)/bin/activate ]; then . $(VENV)/bin/activate; fi;
-CONFIG_MANAGE=$(IN_VENV) python lib/galaxy/webapps/config_manage.py
+CONFIG_MANAGE=$(IN_VENV) python lib/galaxy/config/config_manage.py
 PROJECT_URL?=https://github.com/galaxyproject/galaxy
 DOCS_DIR=doc
 DOC_SOURCE_DIR=$(DOCS_DIR)/source
@@ -129,11 +129,14 @@ release-check-blocking-prs: ## Check github for release blocking PRs
 release-bootstrap-history: ## bootstrap history for a new release
 	$(IN_VENV) python scripts/bootstrap_history.py --release $(RELEASE_CURR)
 
-update-dependencies:  ## update linting + dev dependencies
-	sh lib/galaxy/dependencies/pipfiles/update.sh
+build-dependencies-docker: ## Builds the docker container used for dependency updates
+	$(MAKE) -C lib/galaxy/dependencies/pipfiles/docker
 
-update-and-commit-dependencies:  ## update and commit linting + dev dependencies
-	sh lib/galaxy/dependencies/pipfiles/update.sh -c
+update-dependencies:  build-dependencies-docker ## update linting + dev dependencies
+	sh lib/galaxy/dependencies/pipfiles/update.sh -d
+
+update-and-commit-dependencies: build-dependencies-docker ## update and commit linting + dev dependencies
+	sh lib/galaxy/dependencies/pipfiles/update.sh -d -c
 
 node-deps: ## Install NodeJS dependencies.
 ifndef YARN
@@ -156,14 +159,22 @@ client-production-maps: node-deps ## Rebuild client-side artifacts for a product
 client-format: node-deps ## Reformat client code
 	cd client && yarn run prettier
 
-client-watch: node-deps ## A useful target for parallel development building.
+client-watch: node-deps ## A useful target for parallel development building.  See also client-dev-server.
 	cd client && yarn run watch
+
+client-dev-server: node-deps ## Starts a webpack dev server for client development (HMR enabled)
+	cd client && yarn run webpack-dev-server
 
 client-test: node-deps  ## Run JS unit tests via Karma
 	cd client && yarn run test
 
-client-eslint: node-deps  ## Run client linting
+client-eslint: node-deps # Run client linting
 	cd client && yarn run eslint
+
+client-format-check: node-deps # Run client formatting check
+	cd client && yarn run prettier-check
+
+client-lint: client-eslint client-format-check ## ES lint and check format of client
 
 client-test-watch: client ## Watch and run qunit tests on changes via Karma
 	cd client && yarn run test-watch
