@@ -101,7 +101,6 @@ class PSAAuthnz(IdentityProvider):
         self.config['SOCIAL_AUTH_PIPELINE'] = AUTH_PIPELINE
         self.config['DISCONNECT_PIPELINE'] = DISCONNECT_PIPELINE
         self.config[setting_name('AUTHENTICATION_BACKENDS')] = (BACKENDS[provider],)
-        self.config["VERIFY_SSL"] = False
 
         self.config["VERIFY_SSL"] = oidc_config.get("VERIFY_SSL")
         self.config["REQUESTS_TIMEOUT"] = oidc_config.get("REQUESTS_TIMEOUT")
